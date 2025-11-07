@@ -10,7 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import AnimatedBridgette from './AnimatedBridgette';
 import { Child, FamilyProfile } from '@/types/family';
-import { familyAPI, childrenAPI } from '@/lib/api';
+import { familyAPI, childrenAPI, authAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface FamilyOnboardingProps {
@@ -222,11 +222,32 @@ const FamilyOnboarding: React.FC<FamilyOnboardingProps> = ({ onComplete }) => {
     setBridgetteMessage("Just a moment while I set everything up for you! 🌟");
 
     try {
-      // Create family profile
+      // Step 1: Create a user for Parent 1
+      const parent1Email = familyData.parent1!.email;
+      const tempPassword = "password123"; // In a real app, this should be handled more securely
+
+      try {
+        await authAPI.signup({
+          email: parent1Email,
+          password: tempPassword,
+          firstName: familyData.parent1!.firstName,
+          lastName: familyData.parent1!.lastName
+        });
+      } catch (error) {
+        // Ignore if user already exists, just log in
+        console.info("User might already exist, attempting login.");
+      }
+
+      // Step 2: Log in to get the auth token
+      const loginResponse = await authAPI.login(parent1Email, tempPassword);
+      const token = loginResponse.access_token;
+      localStorage.setItem('authToken', token); // Store the token
+
+      // Step 3: Create family profile with authentication
       const familyResponse = await familyAPI.createFamily({
         familyName: familyData.familyName || `${familyData.parent1?.lastName}-${familyData.parent2?.lastName}`,
-        parent1Email: familyData.parent1!.email,
-        parent2Email: familyData.parent2!.email,
+        parent1_name: `${familyData.parent1!.firstName} ${familyData.parent1!.lastName}`,
+        parent2_email: familyData.parent2!.email,
         custodyArrangement: familyData.custodyArrangement,
       });
 

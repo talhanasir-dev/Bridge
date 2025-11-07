@@ -11,6 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import BridgetteAvatar from './BridgetteAvatar';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 interface CalendarEvent {
   id: string;
@@ -58,7 +60,13 @@ interface EmailNotification {
   changeRequest: ChangeRequest;
 }
 
-const CalendarView: React.FC = () => {
+import { FamilyProfile } from '@/types/family';
+
+interface CalendarViewProps {
+  familyProfile: FamilyProfile | null;
+}
+
+const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
   const { toast } = useToast();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showChangeRequest, setShowChangeRequest] = useState(false);
@@ -781,6 +789,67 @@ const CalendarView: React.FC = () => {
     }
   };
 
+  const handleDownloadPdf = () => {
+    const emailContentElement = document.getElementById('email-content-for-pdf');
+    if (emailContentElement) {
+      // Temporarily modify styles for full capture
+      const originalHeight = emailContentElement.style.height;
+      const originalMaxHeight = emailContentElement.style.maxHeight;
+      const originalOverflow = emailContentElement.style.overflow;
+      emailContentElement.style.height = 'auto';
+      emailContentElement.style.maxHeight = 'none';
+      emailContentElement.style.overflow = 'visible';
+
+      html2canvas(emailContentElement, {
+        scrollY: -window.scrollY,
+        useCORS: true,
+      }).then(canvas => {
+        // Restore original styles
+        emailContentElement.style.height = originalHeight;
+        emailContentElement.style.maxHeight = originalMaxHeight;
+        emailContentElement.style.overflow = originalOverflow;
+
+        const imgData = canvas.toDataURL('image/png');
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'pt',
+          format: 'a4'
+        });
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+        const pdfHeight = pdf.internal.pageSize.getHeight();
+        const canvasWidth = canvas.width;
+        const canvasHeight = canvas.height;
+        const ratio = canvasWidth / pdfWidth;
+        const scaledHeight = canvasHeight / ratio;
+
+        if (scaledHeight > pdfHeight) {
+          let y = 0;
+          let remainingHeight = canvasHeight;
+          while (remainingHeight > 0) {
+            const pageCanvas = document.createElement('canvas');
+            pageCanvas.width = canvasWidth;
+            pageCanvas.height = pdfHeight * ratio;
+            const pageCtx = pageCanvas.getContext('2d');
+            if (pageCtx) {
+              pageCtx.drawImage(canvas, 0, y, canvasWidth, pdfHeight * ratio, 0, 0, canvasWidth, pdfHeight * ratio);
+              const pageImgData = pageCanvas.toDataURL('image/png');
+              pdf.addImage(pageImgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+              remainingHeight -= pdfHeight * ratio;
+              y += pdfHeight * ratio;
+              if (remainingHeight > 0) {
+                pdf.addPage();
+              }
+            }
+          }
+        } else {
+          pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, scaledHeight);
+        }
+        
+        pdf.save('schedule-change-documentation.pdf');
+      });
+    }
+  };
+
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December'
@@ -1430,7 +1499,8 @@ const CalendarView: React.FC = () => {
 
               <div className="border rounded-lg p-4 bg-white">
                 <h3 className="font-medium text-gray-800 mb-3">Email Content Preview:</h3>
-                <div 
+                <div
+                  id="email-content-for-pdf"
                   className="border rounded p-4 bg-gray-50 max-h-96 overflow-y-auto"
                   dangerouslySetInnerHTML={{ __html: generatedEmail.content }}
                 />
@@ -1440,10 +1510,7 @@ const CalendarView: React.FC = () => {
                 <Button variant="outline" onClick={() => setShowEmailPreview(false)}>
                   Close
                 </Button>
-                <Button onClick={() => {
-                  // In a real app, this would download or print the email
-                  console.log('Email content:', generatedEmail.content);
-                }}>
+                <Button onClick={handleDownloadPdf}>
                   <FileText className="w-4 h-4 mr-2" />
                   Download PDF
                 </Button>

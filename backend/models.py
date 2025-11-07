@@ -7,6 +7,7 @@ class User(BaseModel):
     lastName: str
     email: str
     password: str
+    role: str = "user"
 
 class Child(BaseModel):
     id: Optional[str] = None
@@ -18,18 +19,43 @@ class Child(BaseModel):
     medications: Optional[str] = None
     notes: Optional[str] = None
 
+class CustodyAgreement(BaseModel):
+    uploadDate: Optional[datetime] = None
+    fileName: Optional[str] = None
+    parsedData: Optional[dict] = None  # AI-parsed key terms
+    custodySchedule: Optional[str] = None
+    holidaySchedule: Optional[str] = None
+    decisionMaking: Optional[str] = None
+    expenseSplit: Optional[dict] = None  # e.g., {"ratio": "50-50", "parent1": 50, "parent2": 50}
+
 class Family(BaseModel):
     id: Optional[str] = None
     familyName: str
+    familyCode: Optional[str] = None  # Unique 6-digit code for partner linking
     parent1_email: str  # Reference to user email
     parent2_email: Optional[str] = None  # Reference to user email
+    parent1_name: Optional[str] = None
+    parent2_name: Optional[str] = None
     children: List[Child] = []
     custodyArrangement: Optional[str] = None
+    custodyAgreement: Optional[CustodyAgreement] = None
+    createdAt: Optional[datetime] = None
+    linkedAt: Optional[datetime] = None  # When parent2 joined
 
 class FamilyCreate(BaseModel):
     familyName: str
+    parent1_name: str
     parent2_email: Optional[str] = None
     custodyArrangement: Optional[str] = None
+
+class FamilyLink(BaseModel):
+    familyCode: str
+    parent2_name: str
+
+class ContractUpload(BaseModel):
+    fileName: str
+    fileContent: str  # Base64 encoded file content
+    fileType: str  # pdf, doc, txt, etc.
 
 class ChildCreate(BaseModel):
     name: str

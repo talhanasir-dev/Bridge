@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Bell, Shield, Palette, Globe, Heart, Save, Edit, Camera, MessageSquare, BookOpen, Languages } from 'lucide-react';
+import { User, Bell, Shield, Palette, Globe, Heart, Save, Edit, Camera, MessageSquare, BookOpen, Languages, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,8 +11,12 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import AnimatedBridgette from './AnimatedBridgette';
 
-const UserSettings: React.FC = () => {
-  const [bridgetteExpression, setBridgetteExpression] = useState<'happy' | 'thinking' | 'encouraging' | 'celebrating' | 'waving'>('happy');
+interface UserSettingsProps {
+  onBack: () => void;
+}
+
+const UserSettings: React.FC<UserSettingsProps> = ({ onBack }) => {
+  const [bridgetteExpression, setBridgetteExpression] = useState<'thinking' | 'encouraging' | 'celebrating' | 'balanced' | 'mediating'>('encouraging');
   const [bridgetteMessage, setBridgetteMessage] = useState("Let's make sure your Bridge experience is perfect for you! I'm here to help with any changes you'd like to make! ⚙️");
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -132,7 +136,7 @@ const UserSettings: React.FC = () => {
     setHasChanges(false);
     
     setTimeout(() => {
-      setBridgetteExpression('happy');
+      setBridgetteExpression('encouraging');
       setBridgetteMessage("Everything looks great! Is there anything else you'd like to adjust?");
     }, 3000);
   };
@@ -171,9 +175,15 @@ const UserSettings: React.FC = () => {
           <div className="lg:col-span-2">
             <Card className="shadow-2xl">
               <CardHeader>
-                <CardTitle className="text-2xl font-bold text-gray-800 flex items-center">
-                  <User className="w-6 h-6 mr-3 text-blue-600" />
-                  Account Settings
+                <CardTitle className="text-2xl font-bold text-gray-800 flex items-center justify-between">
+                  <div className="flex items-center">
+                    <User className="w-6 h-6 mr-3 text-blue-600" />
+                    Account Settings
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={onBack}>
+                    <ArrowLeft className="w-4 h-4 mr-2" />
+                    Back
+                  </Button>
                 </CardTitle>
                 <p className="text-gray-600">Customize your Bridge experience</p>
               </CardHeader>

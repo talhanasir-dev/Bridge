@@ -3,8 +3,8 @@ from typing import List, Optional
 import uuid
 from datetime import datetime
 
-from ..models import Event, EventCreate, User, ChangeRequest, ChangeRequestCreate, ChangeRequestUpdate
-from .auth import get_current_user
+from models import Event, EventCreate, User, ChangeRequest, ChangeRequestCreate, ChangeRequestUpdate
+from routers.auth import get_current_user
 
 router = APIRouter()
 

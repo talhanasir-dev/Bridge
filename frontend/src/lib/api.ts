@@ -75,8 +75,8 @@ export const authAPI = {
 export const familyAPI = {
   createFamily: async (familyData: {
     familyName: string;
-    parent1Email: string;
-    parent2Email: string;
+    parent1_name: string;
+    parent2_email?: string;
     custodyArrangement?: string;
   }) => {
     return fetchWithAuth('/api/v1/family', {
@@ -85,8 +85,33 @@ export const familyAPI = {
     });
   },
 
+  linkToFamily: async (linkData: {
+    familyCode: string;
+    parent2_name: string;
+  }) => {
+    return fetchWithAuth('/api/v1/family/link', {
+      method: 'POST',
+      body: JSON.stringify(linkData),
+    });
+  },
+
   getFamily: async () => {
     return fetchWithAuth('/api/v1/family');
+  },
+
+  uploadContract: async (contractData: {
+    fileName: string;
+    fileContent: string;
+    fileType: string;
+  }) => {
+    return fetchWithAuth('/api/v1/family/contract', {
+      method: 'POST',
+      body: JSON.stringify(contractData),
+    });
+  },
+
+  getContract: async () => {
+    return fetchWithAuth('/api/v1/family/contract');
   },
 };
 

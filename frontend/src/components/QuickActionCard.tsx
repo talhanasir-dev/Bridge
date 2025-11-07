@@ -33,7 +33,7 @@ const QuickActionCard: React.FC<QuickActionCardProps> = ({
   return (
     <button
       onClick={onClick}
-      className={`relative w-full p-6 rounded-2xl ${colorClasses[color]} ${textColor} shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-left group ${urgent ? 'animate-pulse' : ''}`}
+      className={`relative w-full p-6 rounded-2xl ${colorClasses[color]} ${textColor} shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 text-left group`}
     >
       {badge && (
         <div className="absolute -top-2 -right-2 bg-bridge-red text-white text-xs font-bold px-2 py-1 rounded-full shadow-lg">

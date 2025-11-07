@@ -2,6 +2,7 @@ fastapi
 uvicorn
 python-dotenv
 pymongo
-passlib[bcrypt]
-python-jose[cryptography]PyJWT>=2.0.0
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]
+PyJWT>=2.0.0
 python-multipart>=0.0.5

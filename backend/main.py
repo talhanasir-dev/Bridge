@@ -1,11 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-import os
-from dotenv import load_dotenv
-import pymongo
-from .routers import auth, family, calendar
-
-load_dotenv()
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from routers import auth, family, calendar
+from database import db
 
 app = FastAPI()
 
@@ -21,15 +19,7 @@ app.add_middleware(
     max_age=3600,
 )
 
-# Database connection
-try:
-    client = pymongo.MongoClient(os.getenv("MONGODB_URI"))
-    db = client.test # Replace "test" with your database name if different
-    # The ismaster command is cheap and does not require auth.
-    client.admin.command('ismaster')
-    db_connection_status = "successful"
-except pymongo.errors.ConnectionFailure:
-    db_connection_status = "failed"
+db_connection_status = "successful" if db is not None else "failed"
 
 # Include routers AFTER middleware
 app.include_router(auth.router)

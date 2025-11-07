@@ -7,14 +7,18 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import AnimatedBridgette from './AnimatedBridgette';
+import { authAPI } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 interface AccountSetupProps {
-  onComplete: () => void;
+  onComplete: (userData: { firstName: string; lastName: string; email: string }) => void;
 }
 
 const AccountSetup: React.FC<AccountSetupProps> = ({ onComplete }) => {
+  const { toast } = useToast();
   const [currentStep, setCurrentStep] = useState(0);
   const [showPassword, setShowPassword] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [bridgetteExpression, setBridgetteExpression] = useState<'happy' | 'thinking' | 'encouraging' | 'celebrating' | 'waving'>('waving');
   const [bridgetteMessage, setBridgetteMessage] = useState("Hi there! I'm Bridgette, and I'm so excited to help you create your Bridge account! Let's get started! 🌟");
 
@@ -80,7 +84,7 @@ const AccountSetup: React.FC<AccountSetupProps> = ({ onComplete }) => {
     }
   };
 
-  const nextStep = () => {
+  const nextStep = async () => {
     if (currentStep < steps.length - 1) {
       setBridgetteExpression('celebrating');
       setBridgetteMessage("Awesome! You're doing great! Let's keep going! ✨");
@@ -90,11 +94,44 @@ const AccountSetup: React.FC<AccountSetupProps> = ({ onComplete }) => {
         setBridgetteMessage(getStepMessage(currentStep + 1));
       }, 1000);
     } else {
-      setBridgetteExpression('celebrating');
-      setBridgetteMessage("🎉 Welcome to Bridge! Your account is all set up and ready to go!");
-      setTimeout(() => {
-        onComplete();
-      }, 2000);
+      // Last step - create account and login
+      setIsSubmitting(true);
+      try {
+        // Create account
+        await authAPI.signup({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password
+        });
+
+        // Auto-login after signup
+        await authAPI.login(formData.email, formData.password);
+
+        setBridgetteExpression('celebrating');
+        setBridgetteMessage("🎉 Welcome to Bridge! Your account is all set up and ready to go!");
+        
+        toast({
+          title: "Success!",
+          description: "Your account has been created and you're logged in!",
+        });
+
+        setTimeout(() => {
+          onComplete({
+            firstName: formData.firstName,
+            lastName: formData.lastName,
+            email: formData.email
+          });
+        }, 2000);
+      } catch (error) {
+        console.error('Error creating account:', error);
+        toast({
+          title: "Error",
+          description: error instanceof Error ? error.message : "Failed to create account. Please try again.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -426,10 +463,10 @@ const AccountSetup: React.FC<AccountSetupProps> = ({ onComplete }) => {
                 
                 <Button 
                   onClick={nextStep}
-                  disabled={!canProceed()}
+                  disabled={!canProceed() || isSubmitting}
                   className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700"
                 >
-                  {currentStep === steps.length - 1 ? 'Create Account!' : 'Continue'}
+                  {isSubmitting ? 'Creating Account...' : currentStep === steps.length - 1 ? 'Create Account!' : 'Continue'}
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>

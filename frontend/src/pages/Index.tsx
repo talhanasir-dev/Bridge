@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, Plus, BookOpen, UserPlus, Scale, AlertTriangle, HelpCircle, Baby } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, Plus, BookOpen, UserPlus, Scale, AlertTriangle, HelpCircle, Baby, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -13,21 +13,147 @@ import EducationalResources from '@/components/EducationalResources';
 import OnboardingFlow from '@/components/OnboardingFlow';
 import OnboardingExplanation from '@/components/OnboardingExplanation';
 import AccountSetup from '@/components/AccountSetup';
+import FamilyCodeSetup from '@/components/FamilyCodeSetup';
+import ContractUpload from '@/components/ContractUpload';
 import UserSettings from '@/components/UserSettings';
 import FamilyOnboarding from '@/components/FamilyOnboarding';
 import ChildManagement from '@/components/ChildManagement';
 import { FamilyProfile, Child } from '@/types/family';
+import { authAPI, familyAPI } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
-const Index = () => {
+interface IndexProps {
+  onLogout: () => void;
+  startOnboarding?: boolean;
+}
+
+const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false }) => {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [showOnboarding, setShowOnboarding] = useState(false);
-  const [showOnboardingExplanation, setShowOnboardingExplanation] = useState(false);
+  const [showOnboardingExplanation, setShowOnboardingExplanation] = useState(startOnboarding);
   const [showAccountSetup, setShowAccountSetup] = useState(false);
+  const [showFamilyCodeSetup, setShowFamilyCodeSetup] = useState(false);
+  const [showContractUpload, setShowContractUpload] = useState(false);
   const [showFamilyOnboarding, setShowFamilyOnboarding] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showChildManagement, setShowChildManagement] = useState(false);
   const [isFirstTime, setIsFirstTime] = useState(false);
   const [familyProfile, setFamilyProfile] = useState<FamilyProfile | null>(null);
+  const [familyCodeMode, setFamilyCodeMode] = useState<'create' | 'join'>('create');
+  const [tempFamilyData, setTempFamilyData] = useState<{
+    firstName?: string;
+    lastName?: string;
+    email?: string;
+    familyName?: string;
+    parent1_name?: string;
+    familyCode?: string;
+  } | null>(null);
+  const [currentUser, setCurrentUser] = useState<{ firstName: string; lastName: string; email: string } | null>(null);
+
+  // Fetch current user and family profile on mount
+  useEffect(() => {
+    const fetchUserData = async () => {
+      try {
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          // Fetch user profile
+          const userProfile = await authAPI.getCurrentUser();
+          setCurrentUser({
+            firstName: userProfile.firstName,
+            lastName: userProfile.lastName,
+            email: userProfile.email
+          });
+
+          // Fetch family profile if exists
+          try {
+            const family = await familyAPI.getFamily();
+            if (family) {
+              // Convert backend family data to FamilyProfile format
+              // This is a simplified version - you may need to adjust based on your backend structure
+              setFamilyProfile(family as FamilyProfile);
+            }
+          } catch (error) {
+            // Family profile doesn't exist yet - that's okay
+            console.info('No family profile found yet');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching user data:', error);
+      }
+    };
+
+    fetchUserData();
+  }, []);
+
+  // Show onboarding explanation (check this first as it's a direct user action)
+  if (showOnboardingExplanation) {
+    return (
+      <OnboardingExplanation 
+        onStartJourney={() => {
+          setShowOnboardingExplanation(false);
+          setShowAccountSetup(true);
+        }}
+        onCancel={() => {
+          // Skip Preview should also start the journey, not go back to dashboard
+          setShowOnboardingExplanation(false);
+          setShowAccountSetup(true);
+        }}
+      />
+    );
+  }
+
+  // Show account setup screen (check this before family onboarding)
+  if (showAccountSetup) {
+    return (
+      <AccountSetup 
+        onComplete={(userData) => {
+          // Store user data for Family Code setup
+          setTempFamilyData({
+            firstName: userData.firstName,
+            lastName: userData.lastName,
+            email: userData.email,
+            familyName: `${userData.lastName} Family`, // Auto-generate family name
+            parent1_name: `${userData.firstName} ${userData.lastName}`
+          });
+          setShowAccountSetup(false);
+          setShowFamilyCodeSetup(true);
+        }} 
+      />
+    );
+  }
+
+  // Show Family Code Setup
+  if (showFamilyCodeSetup) {
+    return (
+      <FamilyCodeSetup
+        mode={familyCodeMode}
+        onSuccess={(familyData) => {
+          setTempFamilyData(prev => ({ ...prev, ...familyData }));
+          setShowFamilyCodeSetup(false);
+          setShowContractUpload(true);
+        }}
+        familyName={tempFamilyData?.familyName}
+        parent1Name={tempFamilyData?.parent1_name}
+      />
+    );
+  }
+
+  // Show Contract Upload
+  if (showContractUpload) {
+    return (
+      <ContractUpload
+        onComplete={(parsedData) => {
+          setShowContractUpload(false);
+          setShowFamilyOnboarding(true);
+        }}
+        onSkip={() => {
+          setShowContractUpload(false);
+          setShowFamilyOnboarding(true);
+        }}
+      />
+    );
+  }
 
   // Show family onboarding first if no profile exists
   if (!familyProfile && showFamilyOnboarding) {
@@ -38,33 +164,6 @@ const Index = () => {
           setShowFamilyOnboarding(false);
           setShowOnboarding(true);
           setIsFirstTime(true);
-        }} 
-      />
-    );
-  }
-
-  // Show onboarding explanation
-  if (showOnboardingExplanation) {
-    return (
-      <OnboardingExplanation 
-        onStartJourney={() => {
-          setShowOnboardingExplanation(false);
-          setShowAccountSetup(true);
-        }}
-        onCancel={() => {
-          setShowOnboardingExplanation(false);
-        }}
-      />
-    );
-  }
-
-  // Show account setup screen
-  if (showAccountSetup) {
-    return (
-      <AccountSetup 
-        onComplete={() => {
-          setShowAccountSetup(false);
-          setShowFamilyOnboarding(true);
         }} 
       />
     );
@@ -84,7 +183,7 @@ const Index = () => {
 
   // Show settings screen
   if (showSettings) {
-    return <UserSettings />;
+    return <UserSettings onBack={() => setShowSettings(false)} />;
   }
 
   // Show child management
@@ -248,7 +347,7 @@ const Index = () => {
             transform: scale(1) translateY(0);
           }
         }
-      `}</style>
+       `}</style>
 
       <header className="bg-white shadow-sm border-b-2 border-bridge-blue">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -270,6 +369,11 @@ const Index = () => {
             </div>
             
             <div className="flex items-center space-x-4">
+              {currentUser && (
+                <span className="text-sm text-gray-600 hidden md:block">
+                  Welcome, <strong>{currentUser.firstName}</strong>
+                </span>
+              )}
               {familyProfile && (
                 <Button 
                   variant="outline" 
@@ -281,15 +385,21 @@ const Index = () => {
                   Manage Children ({familyProfile.children.length})
                 </Button>
               )}
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setShowOnboardingExplanation(true)}
-                className="border-bridge-blue text-bridge-blue hover:bg-bridge-blue hover:text-white"
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                Create Account
-              </Button>
+              {!currentUser && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setShowOnboardingExplanation(true);
+                    setShowAccountSetup(false);
+                    setShowFamilyOnboarding(false);
+                  }}
+                  className="border-bridge-blue text-bridge-blue hover:bg-bridge-blue hover:text-white"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Create Account
+                </Button>
+              )}
               <Button 
                 variant="outline" 
                 size="sm"
@@ -299,6 +409,23 @@ const Index = () => {
                 <Settings className="w-4 h-4 mr-2" />
                 Settings
               </Button>
+              {currentUser && (
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    onLogout();
+                    toast({
+                      title: "Logged out",
+                      description: "You have been logged out successfully.",
+                    });
+                  }}
+                  className="border-red-400 text-red-600 hover:bg-red-50"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Logout
+                </Button>
+              )}
             </div>
           </div>
         </div>
@@ -368,7 +495,9 @@ const Index = () => {
               <CardContent className="p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1 pr-6 speech-bubble">
-                    <h2 className="text-2xl font-bold mb-3 text-bridge-black">Good morning, Sarah! ⚖️</h2>
+                    <h2 className="text-2xl font-bold mb-3 text-bridge-black">
+                      Good morning{currentUser ? `, ${currentUser.firstName}` : ''}! ⚖️
+                    </h2>
                     <p className="text-bridge-black mb-4">
                       Bridgette here! I hope you're having a wonderful day. I wanted to let you know that you have 
                       2 upcoming events on your calendar and there's 1 expense that needs your review. 
