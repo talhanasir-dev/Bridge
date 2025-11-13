@@ -156,6 +156,8 @@ class InMemoryDB:
         self.conversations = InMemoryCollection()
         self.messages = InMemoryCollection()
         self.expenses = InMemoryCollection()
+        self.documents = InMemoryCollection()
+        self.document_folders = InMemoryCollection()
 
 
 try:

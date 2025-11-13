@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Upload, FileText, Download, Eye, Trash2, Plus, Search, Filter, Calendar, Shield, Lock, FolderOpen, Folder, ArrowLeft, Heart, Camera, Users, AlertTriangle, GraduationCap, Stethoscope, Scale, Image, Video, FileImage, Edit, X, Briefcase, Home, Star, Music, Gamepad2, Plane, Gift, Baby, Car, Book, Coffee, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,13 +10,16 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import BridgetteAvatar from './BridgetteAvatar';
+import { documentsAPI } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
+import { authAPI } from '@/lib/api';
 
 interface Document {
   id: string;
   name: string;
   type: 'custody-agreement' | 'court-order' | 'medical' | 'school' | 'financial' | 'emergency' | 'memories' | 'custom' | 'other';
   customCategory?: string;
-  uploadDate: Date;
+  uploadDate: string; // ISO string from backend
   size: string;
   status: 'processed' | 'processing' | 'needs-review';
   tags: string[];
@@ -24,6 +27,8 @@ interface Document {
   isProtected?: boolean;
   protectionReason?: string;
   fileType?: 'pdf' | 'doc' | 'image' | 'video' | 'other';
+  fileUrl?: string;
+  fileName?: string;
   thumbnail?: string;
 }
 
@@ -31,7 +36,7 @@ interface DocumentFolder {
   id: string;
   name: string;
   description: string;
-  icon: React.ComponentType<any>;
+  icon: string; // Icon name from backend
   color: string;
   bgColor: string;
   documentTypes: string[];
@@ -41,113 +46,27 @@ interface DocumentFolder {
   customCategory?: string;
 }
 
-const DocumentManager: React.FC = () => {
-  const [documents] = useState<Document[]>([
-    {
-      id: '1',
-      name: 'Custody Agreement - Final.pdf',
-      type: 'custody-agreement',
-      uploadDate: new Date('2024-01-10'),
-      size: '2.4 MB',
-      status: 'processed',
-      tags: ['custody', 'legal', 'final'],
-      description: 'Primary custody agreement with visitation schedule',
-      isProtected: true,
-      protectionReason: 'This is your official divorce contract and cannot be deleted. It serves as the legal foundation for your co-parenting arrangement.',
-      fileType: 'pdf'
-    },
-    {
-      id: '2',
-      name: 'Emergency Contacts - School.pdf',
-      type: 'emergency',
-      uploadDate: new Date('2024-01-15'),
-      size: '156 KB',
-      status: 'processed',
-      tags: ['school', 'emergency', 'contacts'],
-      isProtected: false,
-      fileType: 'pdf'
-    },
-    {
-      id: '3',
-      name: 'Medical Insurance Cards.jpg',
-      type: 'medical',
-      uploadDate: new Date('2024-01-18'),
-      size: '890 KB',
-      status: 'needs-review',
-      tags: ['medical', 'insurance'],
-      isProtected: false,
-      fileType: 'image'
-    },
-    {
-      id: '4',
-      name: 'Divorce Decree - Certified Copy.pdf',
-      type: 'court-order',
-      uploadDate: new Date('2024-01-05'),
-      size: '1.8 MB',
-      status: 'processed',
-      tags: ['divorce', 'court', 'certified'],
-      description: 'Official certified copy of divorce decree',
-      isProtected: true,
-      protectionReason: 'This is your official divorce decree and cannot be deleted. It contains critical legal information and court orders.',
-      fileType: 'pdf'
-    },
-    {
-      id: '5',
-      name: 'Emma\'s First Day of School.jpg',
-      type: 'memories',
-      uploadDate: new Date('2024-01-20'),
-      size: '2.1 MB',
-      status: 'processed',
-      tags: ['school', 'memories', 'emma'],
-      description: 'Emma\'s first day at her new school',
-      isProtected: false,
-      fileType: 'image',
-      thumbnail: '/placeholder.svg'
-    },
-    {
-      id: '6',
-      name: 'Family Vacation Video.mp4',
-      type: 'memories',
-      uploadDate: new Date('2024-01-22'),
-      size: '45.2 MB',
-      status: 'processed',
-      tags: ['vacation', 'family', 'memories'],
-      description: 'Summer vacation at the beach',
-      isProtected: false,
-      fileType: 'video'
-    },
-    {
-      id: '7',
-      name: 'Report Card - Q1.pdf',
-      type: 'school',
-      uploadDate: new Date('2024-01-25'),
-      size: '324 KB',
-      status: 'processed',
-      tags: ['school', 'grades', 'emma'],
-      isProtected: false,
-      fileType: 'pdf'
-    },
-    {
-      id: '8',
-      name: 'Soccer Team Schedule.pdf',
-      type: 'custom',
-      customCategory: 'sports-activities',
-      uploadDate: new Date('2024-01-28'),
-      size: '180 KB',
-      status: 'processed',
-      tags: ['soccer', 'schedule', 'activities'],
-      description: 'Emma\'s soccer team practice and game schedule',
-      isProtected: false,
-      fileType: 'pdf'
-    }
-  ]);
+interface CurrentUser {
+  firstName: string;
+  lastName: string;
+  email: string;
+}
 
+const DocumentManager: React.FC = () => {
+  const { toast } = useToast();
+  const [documents, setDocuments] = useState<Document[]>([]);
+  const [folders, setFolders] = useState<DocumentFolder[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentFolder, setCurrentFolder] = useState<string | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [showCreateFolder, setShowCreateFolder] = useState(false);
   const [uploadFolder, setUploadFolder] = useState<string>('');
   const [editingFolder, setEditingFolder] = useState<string | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadDescription, setUploadDescription] = useState('');
+  const [uploading, setUploading] = useState(false);
 
   // Custom folder creation state
   const [newFolderName, setNewFolderName] = useState('');
@@ -155,77 +74,33 @@ const DocumentManager: React.FC = () => {
   const [selectedIcon, setSelectedIcon] = useState<string>('Folder');
   const [selectedColor, setSelectedColor] = useState<string>('blue');
 
-  // Custom folders state
-  const [customFolders, setCustomFolders] = useState<DocumentFolder[]>([
-    {
-      id: 'sports-activities',
-      name: 'Sports & Activities',
-      description: 'Soccer schedules, activity forms, and sports-related documents',
-      icon: Star,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-50 border-purple-200',
-      documentTypes: ['custom'],
-      count: documents.filter(d => d.customCategory === 'sports-activities').length,
-      isCustom: true,
-      customCategory: 'sports-activities'
-    }
-  ]);
+  // Icon mapping from backend names to components
+  const iconMap: Record<string, React.ComponentType<any>> = {
+    'Folder': Folder,
+    'Briefcase': Briefcase,
+    'Home': Home,
+    'Star': Star,
+    'Heart': Heart,
+    'Music': Music,
+    'Gamepad': Gamepad2,
+    'Plane': Plane,
+    'Gift': Gift,
+    'Baby': Baby,
+    'Car': Car,
+    'Book': Book,
+    'Coffee': Coffee,
+    'Palette': Palette,
+    'Camera': Camera,
+    'Scale': Scale,
+    'Stethoscope': Stethoscope,
+    'GraduationCap': GraduationCap,
+    'AlertTriangle': AlertTriangle,
+  };
 
-  const defaultFolders: DocumentFolder[] = [
-    {
-      id: 'legal',
-      name: 'Legal Documents',
-      description: 'Custody agreements, court orders, and legal papers',
-      icon: Scale,
-      color: 'text-red-600',
-      bgColor: 'bg-red-50 border-red-200',
-      documentTypes: ['custody-agreement', 'court-order', 'financial'],
-      count: documents.filter(d => ['custody-agreement', 'court-order', 'financial'].includes(d.type)).length
-    },
-    {
-      id: 'medical',
-      name: 'Medical Records',
-      description: 'Insurance cards, medical records, and health documents',
-      icon: Stethoscope,
-      color: 'text-green-600',
-      bgColor: 'bg-green-50 border-green-200',
-      documentTypes: ['medical'],
-      count: documents.filter(d => d.type === 'medical').length
-    },
-    {
-      id: 'school',
-      name: 'School Documents',
-      description: 'Report cards, school forms, and educational records',
-      icon: GraduationCap,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-50 border-blue-200',
-      documentTypes: ['school'],
-      count: documents.filter(d => d.type === 'school').length
-    },
-    {
-      id: 'emergency',
-      name: 'Emergency Contacts',
-      description: 'Emergency contact lists and important phone numbers',
-      icon: AlertTriangle,
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50 border-orange-200',
-      documentTypes: ['emergency'],
-      count: documents.filter(d => d.type === 'emergency').length
-    },
-    {
-      id: 'memories',
-      name: 'Pictures & Memories',
-      description: 'Photos, videos, and special family moments',
-      icon: Heart,
-      color: 'text-pink-600',
-      bgColor: 'bg-pink-50 border-pink-200',
-      documentTypes: ['memories'],
-      count: documents.filter(d => d.type === 'memories').length,
-      isSpecial: true
-    }
-  ];
-
-  const folders = [...defaultFolders, ...customFolders];
+  // Helper function to get icon component
+  const getIconComponent = (iconName: string): React.ComponentType<any> => {
+    return iconMap[iconName] || Folder;
+  };
 
   const availableIcons = [
     { name: 'Folder', icon: Folder },
@@ -274,8 +149,71 @@ const DocumentManager: React.FC = () => {
     'needs-review': 'bg-orange-100 text-orange-800'
   };
 
+  // Fetch current user
+  const fetchCurrentUser = useCallback(async () => {
+    try {
+      const user = await authAPI.getCurrentUser();
+      setCurrentUser(user);
+    } catch (error) {
+      console.error('Error fetching current user:', error);
+    }
+  }, []);
+
+  // Fetch folders
+  const fetchFolders = useCallback(async () => {
+    try {
+      const foldersData = await documentsAPI.getFolders();
+      setFolders(foldersData);
+    } catch (error) {
+      console.error('Error fetching folders:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load folders",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  // Fetch documents
+  const fetchDocuments = useCallback(async (folderId?: string) => {
+    try {
+      const documentsData = await documentsAPI.getDocuments(folderId);
+      setDocuments(documentsData);
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load documents",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  // Initial data load
+  useEffect(() => {
+    const loadData = async () => {
+      setLoading(true);
+      await Promise.all([
+        fetchCurrentUser(),
+        fetchFolders(),
+        fetchDocuments()
+      ]);
+      setLoading(false);
+    };
+    loadData();
+  }, [fetchCurrentUser, fetchFolders, fetchDocuments]);
+
+  // Fetch documents when folder changes
+  useEffect(() => {
+    if (currentFolder) {
+      fetchDocuments(currentFolder);
+    } else {
+      fetchDocuments();
+    }
+  }, [currentFolder, fetchDocuments]);
+
   const getCurrentFolderDocuments = () => {
-    if (!currentFolder) return [];
+    if (!currentFolder) return documents;
     const folder = folders.find(f => f.id === currentFolder);
     if (!folder) return [];
     
@@ -293,13 +231,37 @@ const DocumentManager: React.FC = () => {
     });
   };
 
-  const handleDeleteDocument = (docId: string) => {
+  const handleDeleteDocument = async (docId: string) => {
     const doc = documents.find(d => d.id === docId);
     if (doc?.isProtected) {
-      console.warn('Attempted to delete protected document:', doc.name);
+      toast({
+        title: "Cannot Delete",
+        description: doc.protectionReason || "This document is protected and cannot be deleted.",
+        variant: "destructive",
+      });
       return;
     }
-    console.log('Deleting document:', docId);
+    
+    try {
+      await documentsAPI.deleteDocument(docId);
+      toast({
+        title: "Success",
+        description: "Document deleted successfully",
+      });
+      // Refresh documents
+      if (currentFolder) {
+        fetchDocuments(currentFolder);
+      } else {
+        fetchDocuments();
+      }
+    } catch (error: any) {
+      console.error('Error deleting document:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete document",
+        variant: "destructive",
+      });
+    }
   };
 
   const getFileIcon = (doc: Document) => {
@@ -315,41 +277,201 @@ const DocumentManager: React.FC = () => {
     }
   };
 
-  const createCustomFolder = () => {
-    if (!newFolderName.trim()) return;
-
-    const selectedIconData = availableIcons.find(i => i.name === selectedIcon);
-    const selectedColorData = availableColors.find(c => c.name === selectedColor);
-    
-    if (!selectedIconData || !selectedColorData) return;
-
-    const folderId = newFolderName.toLowerCase().replace(/\s+/g, '-');
-    
-    const newFolder: DocumentFolder = {
-      id: folderId,
-      name: newFolderName,
-      description: newFolderDescription || `Custom folder for ${newFolderName.toLowerCase()}`,
-      icon: selectedIconData.icon,
-      color: selectedColorData.class,
-      bgColor: selectedColorData.bg,
-      documentTypes: ['custom'],
-      count: 0,
-      isCustom: true,
-      customCategory: folderId
-    };
-
-    setCustomFolders(prev => [...prev, newFolder]);
-    setShowCreateFolder(false);
-    setNewFolderName('');
-    setNewFolderDescription('');
-    setSelectedIcon('Folder');
-    setSelectedColor('blue');
+  const convertFileToBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => {
+        const result = reader.result as string;
+        const base64 = result.split(',')[1];
+        resolve(base64);
+      };
+      reader.onerror = error => reject(error);
+    });
   };
 
-  const deleteCustomFolder = (folderId: string) => {
-    setCustomFolders(prev => prev.filter(f => f.id !== folderId));
-    if (currentFolder === folderId) {
-      setCurrentFolder(null);
+  const createCustomFolder = async () => {
+    if (!newFolderName.trim()) {
+      toast({
+        title: "Validation Error",
+        description: "Please enter a folder name",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const selectedColorData = availableColors.find(c => c.name === selectedColor);
+    
+    if (!selectedColorData) return;
+
+    try {
+      const folderData = await documentsAPI.createFolder({
+        name: newFolderName,
+        description: newFolderDescription || `Custom folder for ${newFolderName.toLowerCase()}`,
+        icon: selectedIcon,
+        color: selectedColorData.class,
+        bg_color: selectedColorData.bg,
+      });
+
+      toast({
+        title: "Success",
+        description: "Custom folder created successfully",
+      });
+
+      setShowCreateFolder(false);
+      setNewFolderName('');
+      setNewFolderDescription('');
+      setSelectedIcon('Folder');
+      setSelectedColor('blue');
+      
+      // Refresh folders
+      fetchFolders();
+    } catch (error: any) {
+      console.error('Error creating folder:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to create folder",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const deleteCustomFolder = async (folderId: string) => {
+    try {
+      await documentsAPI.deleteFolder(folderId);
+      toast({
+        title: "Success",
+        description: "Folder deleted successfully",
+      });
+      
+      if (currentFolder === folderId) {
+        setCurrentFolder(null);
+      }
+      
+      // Refresh folders
+      fetchFolders();
+    } catch (error: any) {
+      console.error('Error deleting folder:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete folder",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleFileUpload = async () => {
+    if (!uploadFile) {
+      toast({
+        title: "Validation Error",
+        description: "Please select a file to upload",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const folder = folders.find(f => f.id === uploadFolder);
+    if (!folder) {
+      toast({
+        title: "Error",
+        description: "Folder not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setUploading(true);
+      
+      // Convert file to base64
+      const fileContent = await convertFileToBase64(uploadFile);
+      
+      // Determine document type
+      let documentType = 'other';
+      if (folder.id === 'memories') {
+        documentType = 'memories';
+      } else if (folder.documentTypes.includes('custody-agreement') || folder.documentTypes.includes('court-order')) {
+        documentType = folder.documentTypes[0];
+      } else if (folder.documentTypes.length > 0) {
+        documentType = folder.documentTypes[0];
+      }
+
+      await documentsAPI.uploadDocument({
+        folder_id: uploadFolder,
+        name: uploadFile.name,
+        type: documentType,
+        description: uploadDescription || undefined,
+        file_content: fileContent,
+        file_name: uploadFile.name,
+      });
+
+      toast({
+        title: "Success",
+        description: "Document uploaded successfully",
+      });
+
+      setShowUpload(false);
+      setUploadFile(null);
+      setUploadDescription('');
+      setUploadFolder('');
+
+      // Refresh documents
+      if (currentFolder) {
+        fetchDocuments(currentFolder);
+      } else {
+        fetchDocuments();
+      }
+      fetchFolders(); // Refresh to update counts
+    } catch (error: any) {
+      console.error('Error uploading document:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to upload document",
+        variant: "destructive",
+      });
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleViewDocument = async (doc: Document) => {
+    if (!doc.fileUrl) return;
+    
+    try {
+      const blobUrl = await documentsAPI.getDocumentFile(doc.fileUrl);
+      window.open(blobUrl, '_blank');
+      // Clean up blob URL after a delay
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+    } catch (error) {
+      console.error('Error viewing document:', error);
+      toast({
+        title: "Error",
+        description: "Failed to open document",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownloadDocument = async (doc: Document) => {
+    if (!doc.fileUrl) return;
+    
+    try {
+      const blobUrl = await documentsAPI.getDocumentFile(doc.fileUrl);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = doc.fileName || doc.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      // Clean up blob URL after a delay
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      toast({
+        title: "Error",
+        description: "Failed to download document",
+        variant: "destructive",
+      });
     }
   };
 
@@ -515,7 +637,10 @@ const DocumentManager: React.FC = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center">
-                {folder && <folder.icon className={`w-5 h-5 mr-2 ${folder.color}`} />}
+                {folder && (() => {
+                  const IconComponent = getIconComponent(folder.icon);
+                  return <IconComponent className={`w-5 h-5 mr-2 ${folder.color}`} />;
+                })()}
                 Upload to {folder?.name}
               </CardTitle>
               <Button variant="outline" onClick={() => setShowUpload(false)}>
@@ -534,7 +659,10 @@ const DocumentManager: React.FC = () => {
               {isMemoriesFolder ? (
                 <Camera className="w-12 h-12 text-pink-400 mx-auto mb-4" />
               ) : isCustomFolder && folder ? (
-                <folder.icon className={`w-12 h-12 ${folder.color} mx-auto mb-4`} />
+                (() => {
+                  const IconComponent = getIconComponent(folder.icon);
+                  return <IconComponent className={`w-12 h-12 ${folder.color} mx-auto mb-4`} />;
+                })()
               ) : (
                 <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
               )}
@@ -549,25 +677,52 @@ const DocumentManager: React.FC = () => {
                   : 'Supports PDF, DOC, DOCX, JPG, PNG up to 10MB'
                 }
               </p>
-              <Button className={
-                isMemoriesFolder ? 'bg-pink-500 hover:bg-pink-600' :
-                isCustomFolder ? '' : ''
-              }>
-                {isMemoriesFolder ? 'Choose Photos & Videos' : 'Choose Files'}
-              </Button>
+              <div>
+                <Input
+                  type="file"
+                  accept={isMemoriesFolder ? "image/*,video/*" : "application/pdf,.doc,.docx,image/*"}
+                  onChange={(e) => {
+                    if (e.target.files && e.target.files[0]) {
+                      setUploadFile(e.target.files[0]);
+                    }
+                  }}
+                  className="hidden"
+                  id="file-upload"
+                />
+                <Button 
+                  className={
+                    isMemoriesFolder ? 'bg-pink-500 hover:bg-pink-600' :
+                    isCustomFolder ? '' : ''
+                  }
+                  onClick={() => {
+                    document.getElementById('file-upload')?.click();
+                  }}
+                >
+                  {isMemoriesFolder ? 'Choose Photos & Videos' : 'Choose Files'}
+                </Button>
+              </div>
+              {uploadFile && (
+                <p className="text-sm text-gray-600 mt-2">
+                  Selected: {uploadFile.name} ({(uploadFile.size / 1024 / 1024).toFixed(2)} MB)
+                </p>
+              )}
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 {isMemoriesFolder ? 'Memory Title' : 'Description'} (optional)
               </label>
-              <Input placeholder={
-                isMemoriesFolder 
-                  ? "e.g., Emma's birthday party, Family vacation..."
-                  : isCustomFolder
-                    ? `Brief description for your ${folder?.name.toLowerCase()} document`
-                    : "Brief description of the document"
-              } />
+              <Input 
+                placeholder={
+                  isMemoriesFolder 
+                    ? "e.g., Emma's birthday party, Family vacation..."
+                    : isCustomFolder
+                      ? `Brief description for your ${folder?.name.toLowerCase()} document`
+                      : "Brief description of the document"
+                }
+                value={uploadDescription}
+                onChange={(e) => setUploadDescription(e.target.value)}
+              />
             </div>
 
             {isMemoriesFolder && (
@@ -588,7 +743,10 @@ const DocumentManager: React.FC = () => {
             {isCustomFolder && (
               <div className={`p-4 rounded-lg ${folder?.bgColor}`}>
                 <div className="flex items-start space-x-3">
-                  {folder && <folder.icon className={`w-5 h-5 ${folder.color} mt-0.5`} />}
+                  {folder && (() => {
+                    const IconComponent = getIconComponent(folder.icon);
+                    return <IconComponent className={`w-5 h-5 ${folder.color} mt-0.5`} />;
+                  })()}
                   <div className="text-sm">
                     <p className="font-medium text-gray-800">Custom Folder</p>
                     <p className="text-gray-700">
@@ -614,18 +772,36 @@ const DocumentManager: React.FC = () => {
             )}
 
             <div className="flex space-x-3">
-              <Button className="flex-1">
-                {isMemoriesFolder ? 'Add to Memories' : 
+              <Button 
+                className="flex-1"
+                onClick={handleFileUpload}
+                disabled={!uploadFile || uploading}
+              >
+                {uploading ? 'Uploading...' : 
+                 isMemoriesFolder ? 'Add to Memories' : 
                  isCustomFolder ? `Add to ${folder?.name}` :
                  'Upload Document'}
               </Button>
-              <Button variant="outline" onClick={() => setShowUpload(false)}>Cancel</Button>
+              <Button variant="outline" onClick={() => {
+                setShowUpload(false);
+                setUploadFile(null);
+                setUploadDescription('');
+              }}>Cancel</Button>
             </div>
           </CardContent>
         </Card>
       </div>
     );
   };
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   // Main folder view
   if (!currentFolder && !showUpload) {
@@ -639,7 +815,7 @@ const DocumentManager: React.FC = () => {
                 <BridgetteAvatar size="md" expression="encouraging" />
                 <div className="flex-1">
                   <p className="text-sm font-medium text-gray-800">
-                    Hey Sarah, I'm here to help. Ask anything!
+                    Hey {currentUser?.firstName || 'there'}, I'm here to help. Ask anything!
                   </p>
                   <p className="text-xs text-gray-600 mt-1">
                     Your documents are organized into folders! Click any folder to view its contents, create custom folders for unique needs, or add new memories to share with your family! 📁❤️
@@ -710,7 +886,10 @@ const DocumentManager: React.FC = () => {
                   
                   <div className="flex items-start justify-between mb-4">
                     <div className={`p-3 rounded-full ${folder.bgColor}`}>
-                      <folder.icon className={`w-8 h-8 ${folder.color}`} />
+                      {(() => {
+                        const IconComponent = getIconComponent(folder.icon);
+                        return <IconComponent className={`w-8 h-8 ${folder.color}`} />;
+                      })()}
                     </div>
                     <div className="text-right">
                       <div className={`text-2xl font-bold ${folder.color}`}>{folder.count}</div>
@@ -813,7 +992,7 @@ const DocumentManager: React.FC = () => {
             <Card>
               <CardContent className="p-4 text-center">
                 <div className="text-2xl font-bold text-purple-600">
-                  {customFolders.length}
+                  {folders.filter(f => f.isCustom).length}
                 </div>
                 <div className="text-sm text-gray-600">Custom Folders</div>
               </CardContent>
@@ -880,7 +1059,10 @@ const DocumentManager: React.FC = () => {
                   Back to Folders
                 </Button>
                 <div className="flex items-center space-x-3">
-                  {folder && <folder.icon className={`w-6 h-6 ${folder.color}`} />}
+                  {folder && (() => {
+                    const IconComponent = getIconComponent(folder.icon);
+                    return <IconComponent className={`w-6 h-6 ${folder.color}`} />;
+                  })()}
                   <div>
                     <CardTitle className="flex items-center">
                       {folder?.name}
@@ -928,7 +1110,10 @@ const DocumentManager: React.FC = () => {
           {folderDocuments.length === 0 ? (
             <Card>
               <CardContent className="text-center py-12">
-                {folder && <folder.icon className={`w-16 h-16 mx-auto mb-4 ${folder.color} opacity-50`} />}
+                {folder && (() => {
+                  const IconComponent = getIconComponent(folder.icon);
+                  return <IconComponent className={`w-16 h-16 mx-auto mb-4 ${folder.color} opacity-50`} />;
+                })()}
                 <h3 className="text-lg font-medium text-gray-800 mb-2">
                   {searchTerm ? 'No documents found' : `No ${folder?.name.toLowerCase()} yet`}
                 </h3>
@@ -999,7 +1184,7 @@ const DocumentManager: React.FC = () => {
                       <div className="flex items-center space-x-4 text-sm text-gray-500">
                         <span className="flex items-center">
                           <Calendar className="w-4 h-4 mr-1" />
-                          {doc.uploadDate.toLocaleDateString()}
+                          {new Date(doc.uploadDate).toLocaleDateString()}
                         </span>
                         <span>{doc.size}</span>
                         {doc.fileType && (
@@ -1007,20 +1192,30 @@ const DocumentManager: React.FC = () => {
                         )}
                       </div>
                       
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {doc.tags.map((tag) => (
-                          <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
+                      {doc.tags && doc.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {doc.tags.map((tag) => (
+                            <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     
                     <div className="flex items-center space-x-2 ml-4">
-                      <Button variant="outline" size="sm">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleViewDocument(doc)}
+                      >
                         <Eye className="w-4 h-4" />
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleDownloadDocument(doc)}
+                      >
                         <Download className="w-4 h-4" />
                       </Button>
                       {doc.isProtected ? (

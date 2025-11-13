@@ -169,3 +169,63 @@ class ExpenseCreate(BaseModel):
 class ExpenseUpdate(BaseModel):
     status: Optional[str] = None  # 'approved', 'disputed', 'paid'
     dispute_reason: Optional[str] = None
+
+# Document Models
+class DocumentFolder(BaseModel):
+    id: Optional[str] = None
+    family_id: str
+    name: str
+    description: str
+    icon: str  # Icon name (e.g., 'Folder', 'Star', 'Heart')
+    color: str  # Color name (e.g., 'blue', 'purple')
+    bg_color: str  # Background color class
+    document_types: List[str]  # Types of documents this folder contains
+    is_custom: bool = False
+    custom_category: Optional[str] = None
+    created_at: Optional[datetime] = None
+    created_by: Optional[str] = None  # Email of user who created it
+
+class DocumentFolderCreate(BaseModel):
+    name: str
+    description: str
+    icon: str
+    color: str
+    bg_color: str
+
+class DocumentFolderUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    icon: Optional[str] = None
+    color: Optional[str] = None
+    bg_color: Optional[str] = None
+
+class Document(BaseModel):
+    id: Optional[str] = None
+    family_id: str
+    folder_id: Optional[str] = None  # ID of folder (for custom folders)
+    name: str
+    type: str  # 'custody-agreement', 'court-order', 'medical', 'school', 'financial', 'emergency', 'memories', 'custom', 'other'
+    custom_category: Optional[str] = None  # For custom folder documents
+    file_url: str
+    file_name: str
+    file_type: str  # 'pdf', 'doc', 'image', 'video', 'other'
+    file_size: int  # Size in bytes
+    description: Optional[str] = None
+    tags: List[str] = []
+    status: str = 'processed'  # 'processed', 'processing', 'needs-review'
+    is_protected: bool = False
+    protection_reason: Optional[str] = None
+    uploaded_by: str  # Email of user who uploaded
+    children_ids: Optional[List[str]] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class DocumentUpload(BaseModel):
+    folder_id: Optional[str] = None
+    name: str
+    type: str
+    description: Optional[str] = None
+    tags: Optional[List[str]] = None
+    file_content: str  # Base64 encoded file
+    file_name: str
+    children_ids: Optional[List[str]] = None

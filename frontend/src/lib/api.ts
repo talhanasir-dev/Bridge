@@ -312,3 +312,90 @@ export const activityAPI = {
     return fetchWithAuth('/api/v1/activity');
   },
 };
+
+// Documents API
+export const documentsAPI = {
+  getFolders: async () => {
+    return fetchWithAuth('/api/v1/documents/folders');
+  },
+
+  createFolder: async (folderData: {
+    name: string;
+    description: string;
+    icon: string;
+    color: string;
+    bg_color: string;
+  }) => {
+    return fetchWithAuth('/api/v1/documents/folders', {
+      method: 'POST',
+      body: JSON.stringify(folderData),
+    });
+  },
+
+  updateFolder: async (folderId: string, updates: {
+    name?: string;
+    description?: string;
+    icon?: string;
+    color?: string;
+    bg_color?: string;
+  }) => {
+    return fetchWithAuth(`/api/v1/documents/folders/${folderId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  },
+
+  deleteFolder: async (folderId: string) => {
+    return fetchWithAuth(`/api/v1/documents/folders/${folderId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getDocuments: async (folderId?: string) => {
+    const url = folderId 
+      ? `/api/v1/documents?folder_id=${folderId}`
+      : '/api/v1/documents';
+    return fetchWithAuth(url);
+  },
+
+  uploadDocument: async (documentData: {
+    folder_id?: string;
+    name: string;
+    type: string;
+    description?: string;
+    tags?: string[];
+    file_content: string; // Base64 encoded
+    file_name: string;
+    children_ids?: string[];
+  }) => {
+    return fetchWithAuth('/api/v1/documents/upload', {
+      method: 'POST',
+      body: JSON.stringify(documentData),
+    });
+  },
+
+  deleteDocument: async (documentId: string) => {
+    return fetchWithAuth(`/api/v1/documents/${documentId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  getDocumentFile: async (fileUrl: string) => {
+    const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const fullUrl = fileUrl.startsWith('http') ? fileUrl : `${apiBaseUrl}${fileUrl}`;
+    const token = localStorage.getItem('authToken');
+    
+    const response = await fetch(fullUrl, {
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to fetch document');
+    }
+    
+    const blob = await response.blob();
+    return URL.createObjectURL(blob);
+  },
+};
