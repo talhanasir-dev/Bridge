@@ -98,7 +98,7 @@ class InMemoryCollection:
             if self._matches(doc, query):
                 return doc
         return None
-
+    
     def find(self, query: Optional[Dict[str, Any]] = None) -> InMemoryCursor:
         matched = [doc for doc in self.data if self._matches(doc, query)]
         return InMemoryCursor(matched)
@@ -138,7 +138,7 @@ class InMemoryCollection:
                     self._set_value(doc, key, value)
                 modified += 1
         return SimpleNamespace(matched_count=matched, modified_count=modified)
-
+    
     def delete_one(self, query: Dict[str, Any]):
         doc = self.find_one(query)
         if doc:
@@ -167,7 +167,7 @@ try:
         db = InMemoryDB()
     else:
         client = pymongo.MongoClient(
-            mongo_uri,
+            mongo_uri, 
             tlsCAFile=certifi.where(),
             serverSelectionTimeoutMS=5000  # 5 second timeout
         )
