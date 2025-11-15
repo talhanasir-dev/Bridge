@@ -15,8 +15,12 @@ router = APIRouter()
 SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "12960"))  # default 3 days
+MAX_PASSWORD_BYTES = 256
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt_sha256", "bcrypt"],
+    deprecated="auto",
+)
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
 
 class Token(BaseModel):
@@ -37,8 +41,17 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None):
 async def create_user(user_data: User):
     if db.users.find_one({"email": user_data.email}):
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
-    
-    hashed_password = pwd_context.hash(user_data.password)
+
+    if len(user_data.password.encode("utf-8")) > MAX_PASSWORD_BYTES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Password must be {MAX_PASSWORD_BYTES} characters or fewer.",
+        )
+
+    try:
+        hashed_password = pwd_context.hash(user_data.password)
+    except ValueError as exc:  # handle backend-specific limits just in case
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     user_in_db = user_data.model_copy(update={"password": hashed_password})
     db.users.insert_one(user_in_db.model_dump())
     return user_in_db
@@ -52,6 +65,9 @@ async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    if pwd_context.needs_update(user["password"]):
+        updated_hash = pwd_context.hash(form_data.password)
+        db.users.update_one({"_id": user["_id"]}, {"$set": {"password": updated_hash}})
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
         data={"sub": user["email"], "role": user.get("role", "user")}, expires_delta=access_token_expires
