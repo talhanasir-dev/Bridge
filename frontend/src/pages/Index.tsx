@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, Plus, BookOpen, UserPlus, Scale, AlertTriangle, HelpCircle, Baby, LogOut, UserCheck, UserX, BarChart3 } from 'lucide-react';
+import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, BookOpen, Scale, AlertTriangle, HelpCircle, Baby, LogOut, UserCheck, UserX, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import ProgressBar from '@/components/ProgressBar';
 import QuickActionCard from '@/components/QuickActionCard';
 import CalendarView from '@/components/CalendarView';
@@ -23,6 +23,7 @@ import FamilyOnboarding from '@/components/FamilyOnboarding';
 import ChildManagement from '@/components/ChildManagement';
 import RecentActivity from '@/components/RecentActivity';
 import { FamilyProfile, Child } from '@/types/family';
+import DashboardShell, { DashboardNavItem } from '@/components/dashboard/DashboardShell';
 import { authAPI, familyAPI, childrenAPI, adminAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
@@ -128,6 +129,39 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
   const [adminError, setAdminError] = useState<string | null>(null);
 
   const pendingFamilyCount = adminStats?.unlinkedFamilies ?? adminPendingFamilies.length;
+
+  const dashboardNavItems: DashboardNavItem[] = [
+    { id: 'dashboard', label: 'Dashboard', icon: Home },
+    { id: 'calendar', label: 'Calendar', icon: Calendar },
+    {
+      id: 'messages',
+      label: 'Messages',
+      icon: MessageSquare,
+      badge: unreadMessagesCount > 0 ? String(unreadMessagesCount) : undefined,
+    },
+    { id: 'expenses', label: 'Expenses', icon: DollarSign },
+    { id: 'documents', label: 'Documents', icon: FileText },
+    { id: 'resources', label: 'Resources', icon: BookOpen },
+  ];
+
+  const handleLogoutClick = () => {
+    onLogout();
+    toast({
+      title: "Logged out",
+      description: "You have been logged out successfully.",
+    });
+  };
+
+  const handleQuickAdd = () => {
+    toast({
+      title: "Quick add coming soon",
+      description: "Soon you’ll be able to add events, expenses, and notes from here.",
+    });
+  };
+
+  const handleOpenMessages = () => {
+    changeTab('messages');
+  };
 
   const handleCopyFamilyCode = async () => {
     if (!familyProfile?.familyCode) {
@@ -592,13 +626,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => {
-                    onLogout();
-                    toast({
-                      title: "Logged out",
-                      description: "You have been logged out successfully.",
-                    });
-                  }}
+                  onClick={handleLogoutClick}
                   className="border-red-300 text-red-600 hover:bg-red-50"
                 >
                   <LogOut className="w-4 h-4 mr-2" />
@@ -868,7 +896,19 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-blue-50 to-green-50">
+    <DashboardShell
+      navItems={dashboardNavItems}
+      activeItem={activeTab}
+      onNavigate={changeTab}
+      onLogout={handleLogoutClick}
+      onOpenSettings={() => setShowSettings(true)}
+      onOpenChildren={familyProfile ? () => setShowChildManagement(true) : undefined}
+      onCreateQuickAction={handleQuickAdd}
+      onOpenMessages={handleOpenMessages}
+      currentUser={currentUser}
+      heroSubtitle={familyProfile?.familyName || 'Fair & Balanced Co-Parenting'}
+    >
+      <>
       <style>{`
         @keyframes bridgette-float {
           0%, 100% {
@@ -992,89 +1032,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
         }
        `}</style>
 
-      <header className="bg-white shadow-sm border-b-2 border-bridge-blue">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <img 
-                  src="/bridge-avatar.png" 
-                  alt="Bridge Logo" 
-                  className="w-8 h-8"
-                />
-                <h1 className="text-2xl font-bold text-bridge-black">
-                  Bridge
-                </h1>
-              </div>
-              <div className="hidden md:block text-sm text-bridge-black font-medium">
-                Fair & Balanced Co-Parenting
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              {currentUser && (
-                <span className="text-sm text-gray-600 hidden md:block">
-                  Welcome, <strong>{currentUser.firstName}</strong>
-                </span>
-              )}
-              {familyProfile && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => setShowChildManagement(true)}
-                  className="border-green-300 text-green-600 hover:bg-green-50"
-                >
-                  <Baby className="w-4 h-4 mr-2" />
-                  Manage Children ({familyProfile.children.length})
-                </Button>
-              )}
-              {!currentUser && (
-              <Button 
-                variant="outline" 
-                size="sm"
-                  onClick={() => {
-                    setShowOnboardingExplanation(true);
-                    setShowAccountSetup(false);
-                    setShowFamilyOnboarding(false);
-                  }}
-                className="border-bridge-blue text-bridge-blue hover:bg-bridge-blue hover:text-white"
-              >
-                <UserPlus className="w-4 h-4 mr-2" />
-                Create Account
-              </Button>
-              )}
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setShowSettings(true)}
-                className="border-gray-400 text-bridge-black hover:bg-gray-100"
-              >
-                <Settings className="w-4 h-4 mr-2" />
-                Settings
-              </Button>
-              {currentUser && (
-                <Button 
-                  variant="outline" 
-                  size="sm"
-                  onClick={() => {
-                    onLogout();
-                    toast({
-                      title: "Logged out",
-                      description: "You have been logged out successfully.",
-                    });
-                  }}
-                  className="border-red-400 text-red-600 hover:bg-red-50"
-                >
-                  <LogOut className="w-4 h-4 mr-2" />
-                  Logout
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="space-y-6">
         {/* Family Profile Summary */}
         {familyProfile && (
           <Card className="mb-6 border-2 border-green-200 bg-green-50">
@@ -1124,33 +1082,6 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
         )}
 
         <Tabs value={activeTab} onValueChange={changeTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 bg-white rounded-xl shadow-sm p-1 border-2 border-gray-200">
-            <TabsTrigger value="dashboard" className="flex items-center space-x-2 data-[state=active]:bg-bridge-blue data-[state=active]:text-white">
-              <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">Dashboard</span>
-            </TabsTrigger>
-            <TabsTrigger value="calendar" className="flex items-center space-x-2 data-[state=active]:bg-bridge-green data-[state=active]:text-white">
-              <Calendar className="w-4 h-4" />
-              <span className="hidden sm:inline">Calendar</span>
-            </TabsTrigger>
-            <TabsTrigger value="messages" className="flex items-center space-x-2 data-[state=active]:bg-bridge-yellow data-[state=active]:text-bridge-black">
-              <MessageSquare className="w-4 h-4" />
-              <span className="hidden sm:inline">Messages</span>
-            </TabsTrigger>
-            <TabsTrigger value="expenses" className="flex items-center space-x-2 data-[state=active]:bg-bridge-red data-[state=active]:text-white">
-              <DollarSign className="w-4 h-4" />
-              <span className="hidden sm:inline">Expenses</span>
-            </TabsTrigger>
-            <TabsTrigger value="documents" className="flex items-center space-x-2 data-[state=active]:bg-gray-600 data-[state=active]:text-white">
-              <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">Documents</span>
-            </TabsTrigger>
-            <TabsTrigger value="resources" className="flex items-center space-x-2 data-[state=active]:bg-bridge-blue data-[state=active]:text-white">
-              <BookOpen className="w-4 h-4" />
-              <span className="hidden sm:inline">Resources</span>
-            </TabsTrigger>
-          </TabsList>
-
           <TabsContent value="dashboard" className="space-y-6">
             <Card className="bg-gradient-to-r from-bridge-blue to-bridge-green border-2 border-bridge-blue overflow-hidden">
               <CardContent className="p-6">
@@ -1328,17 +1259,17 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
             <EducationalResources />
           </TabsContent>
         </Tabs>
-      </main>
-
-      <div className="fixed bottom-6 right-6">
-        <Button 
-          className="rounded-full w-16 h-16 bg-bridge-blue hover:bg-blue-600 shadow-lg border-2 border-gray-300"
-          onClick={() => {/* Open chat */}}
-        >
-          <HelpCircle className="w-6 h-6 text-white" />
-        </Button>
+        <div className="fixed bottom-6 right-6 hidden md:block">
+          <Button 
+            className="rounded-full w-16 h-16 bg-bridge-blue hover:bg-blue-600 shadow-lg border-2 border-gray-300"
+            onClick={() => {/* Open chat */}}
+          >
+            <HelpCircle className="w-6 h-6 text-white" />
+          </Button>
+        </div>
       </div>
-    </div>
+      </>
+    </DashboardShell>
   );
 };
 
