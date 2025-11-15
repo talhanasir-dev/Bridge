@@ -15,10 +15,10 @@ router = APIRouter()
 SECRET_KEY = os.getenv("JWT_SECRET")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "12960"))  # default 3 days
-MAX_PASSWORD_BYTES = 256
 
 pwd_context = CryptContext(
     schemes=["bcrypt_sha256", "bcrypt"],
+    default="bcrypt_sha256",
     deprecated="auto",
 )
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
@@ -42,16 +42,13 @@ async def create_user(user_data: User):
     if db.users.find_one({"email": user_data.email}):
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
-    if len(user_data.password.encode("utf-8")) > MAX_PASSWORD_BYTES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Password must be {MAX_PASSWORD_BYTES} characters or fewer.",
-        )
-
     try:
         hashed_password = pwd_context.hash(user_data.password)
-    except ValueError as exc:  # handle backend-specific limits just in case
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to process password; please choose a shorter value.",
+        ) from exc
     user_in_db = user_data.model_copy(update={"password": hashed_password})
     db.users.insert_one(user_in_db.model_dump())
     return user_in_db
