@@ -1,0 +1,19 @@
+# Python bytecode / caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+backend/venv/
+.venv/
+venv/
+
+# Environment files
+.env
+backend/.env
+frontend/.env
+frontend/.env.*
+
+# Misc
+.DS_Store
+

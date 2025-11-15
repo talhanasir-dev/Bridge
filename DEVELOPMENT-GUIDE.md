@@ -324,3 +324,4 @@ A feature is considered "done" when:
 For detailed technical specifications, see **[DEV-PRD.md](./frontend/DEV-PRD.md)**  
 For progress tracking, see **[FEATURE-CHECKLIST.md](./FEATURE-CHECKLIST.md)**
 
+
