@@ -1,4 +1,4 @@
-import { ReactNode, CSSProperties } from "react";
+import { ReactNode } from "react";
 import {
   Baby,
   Bell,
@@ -67,7 +67,7 @@ const DashboardNavigation = ({
 
   return (
     <SidebarGroup className="px-3">
-      <SidebarGroupLabel className="text-xs uppercase tracking-[0.2em] text-white/70">
+      <SidebarGroupLabel className="text-xs uppercase tracking-[0.2em] text-slate-400">
         Navigate
       </SidebarGroupLabel>
       <SidebarMenu>
@@ -75,8 +75,8 @@ const DashboardNavigation = ({
           <SidebarMenuItem key={item.id}>
             <SidebarMenuButton
               className={cn(
-                "text-white/90 hover:text-white",
-                item.tone === "alert" && "text-orange-100 data-[active=true]:text-white"
+                "text-slate-600 hover:text-slate-900 data-[active=true]:bg-slate-100 data-[active=true]:text-slate-900",
+                item.tone === "alert" && "text-orange-600 data-[active=true]:text-orange-700"
               )}
               isActive={activeItem === item.id}
               onClick={() => {
@@ -88,7 +88,7 @@ const DashboardNavigation = ({
               <span>{item.label}</span>
             </SidebarMenuButton>
             {item.badge && (
-              <SidebarMenuBadge className="bg-white/10 text-white">
+              <SidebarMenuBadge className="bg-slate-100 text-slate-700 border border-slate-200">
                 {item.badge}
               </SidebarMenuBadge>
             )}
@@ -121,22 +121,10 @@ const DashboardShell = ({
       "B"
     : "B";
 
-  const sidebarTheme: CSSProperties = {
-    "--sidebar-background": "225 27% 12%",
-    "--sidebar-foreground": "210 40% 96%",
-    "--sidebar-accent": "222 47% 20%",
-    "--sidebar-accent-foreground": "210 40% 98%",
-    "--sidebar-border": "222 36% 16%",
-    "--sidebar-ring": "215 83% 53%",
-  };
-
   return (
     <SidebarProvider defaultOpen>
-      <div className="bg-slate-950 text-white">
-        <Sidebar
-          className="bg-gradient-to-b from-slate-950 via-slate-900 to-slate-900 text-white border-none"
-          style={sidebarTheme}
-        >
+      <div className="bg-slate-50 text-slate-900">
+        <Sidebar className="bg-white text-slate-700 border-r border-slate-200 shadow-sm">
           <SidebarHeader className="px-4 pt-5 pb-3">
             <div className="flex items-center gap-3">
               <img
@@ -145,8 +133,10 @@ const DashboardShell = ({
                 className="h-8 w-8 rounded-full bg-white/10 p-1"
               />
               <div>
-                <p className="text-base font-semibold tracking-tight">Bridge</p>
-                <p className="text-xs text-white/70">{heroSubtitle}</p>
+                <p className="text-base font-semibold tracking-tight text-slate-900">
+                  Bridge
+                </p>
+                <p className="text-xs text-slate-500">{heroSubtitle}</p>
               </div>
             </div>
           </SidebarHeader>
@@ -156,16 +146,16 @@ const DashboardShell = ({
               activeItem={activeItem}
               onNavigate={onNavigate}
             />
-            <SidebarSeparator className="bg-white/10" />
+            <SidebarSeparator className="bg-slate-100" />
             <SidebarGroup className="px-3">
-              <SidebarGroupLabel className="text-xs uppercase tracking-[0.2em] text-white/70">
+              <SidebarGroupLabel className="text-xs uppercase tracking-[0.2em] text-slate-400">
                 Quick actions
               </SidebarGroupLabel>
               <SidebarMenu>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => onCreateQuickAction?.()}
-                    className="text-white/90 hover:text-white"
+                    className="text-slate-600 hover:text-slate-900 data-[active=true]:bg-slate-100 data-[active=true]:text-slate-900"
                   >
                     <Plus className="h-4 w-4" />
                     New request
@@ -174,14 +164,14 @@ const DashboardShell = ({
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     onClick={() => onOpenMessages?.()}
-                    className="text-white/90 hover:text-white"
+                    className="text-slate-600 hover:text-slate-900 data-[active=true]:bg-slate-100 data-[active=true]:text-slate-900"
                   >
                     <MessageSquarePlus className="h-4 w-4" />
                     Message partner
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <SidebarMenuButton className="text-white/90 hover:text-white">
+                  <SidebarMenuButton className="text-slate-600 hover:text-slate-900 data-[active=true]:bg-slate-100 data-[active=true]:text-slate-900">
                     <CircleHelp className="h-4 w-4" />
                     Need help?
                   </SidebarMenuButton>
@@ -189,11 +179,11 @@ const DashboardShell = ({
               </SidebarMenu>
             </SidebarGroup>
           </SidebarContent>
-          <SidebarFooter className="p-3 border-t border-white/10">
+          <SidebarFooter className="p-3 border-t border-slate-100">
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start text-white/80 hover:text-white hover:bg-white/10"
+              className="w-full justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               onClick={onOpenSettings}
             >
               <Settings className="mr-2 h-4 w-4" />
@@ -202,7 +192,7 @@ const DashboardShell = ({
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start text-white/80 hover:text-white hover:bg-white/10"
+              className="w-full justify-start text-slate-600 hover:text-slate-900 hover:bg-slate-100"
               onClick={onLogout}
             >
               <LogOut className="mr-2 h-4 w-4" />

@@ -90,7 +90,7 @@
 - ✅ Event legend
 - ✅ Multiple events per day
 - ✅ Visual indicators for pending changes
-- 🔧 Backend API integration (partial)
+- ✅ Backend API integration (events & change requests)
 - 🔧 Real-time sync between parents
 
 ### Event Management
@@ -99,9 +99,9 @@
 - ✅ Event categorization
 - ✅ Swappable vs non-swappable events
 - ✅ Parent assignment (mom/dad/both)
-- 🔧 Create event (backend integration)
-- 🔧 Edit event (backend integration)
-- 🔧 Delete event (backend integration)
+- ✅ Create event (backend integration)
+- ✅ Edit event (backend integration)
+- ✅ Delete event (backend integration)
 - ❌ Recurring event support
 - ❌ Import from Google Calendar
 - ❌ Import from Apple Calendar
@@ -118,7 +118,7 @@
 - ✅ Pending requests list
 - ✅ Approve/decline requests
 - ✅ Request status tracking
-- 🔧 Backend storage for change requests
+- ✅ Backend storage for change requests
 - 🔧 Email notifications on approval
 
 ### Bridgette Calendar Features
@@ -147,7 +147,7 @@
 - 🔧 Email sending integration
 - ❌ Court-stamped PDF generation
 
-**Status:** Calendar UI complete, backend integration partial
+**Status:** Calendar UI complete; backend events + change-request APIs live, real-time sync pending
 
 ---
 
@@ -699,4 +699,5 @@
 ---
 
 **Last Updated:** November 10, 2025
+
 

@@ -184,7 +184,6 @@ export const calendarAPI = {
   },
 
   createEvent: async (eventData: {
-    family_id: string;
     date: string;
     type: string;
     title: string;
@@ -199,7 +198,9 @@ export const calendarAPI = {
 
   createChangeRequest: async (requestData: {
     event_id: string;
-    requestedDate?: string;
+    requestType: 'swap' | 'modify' | 'cancel';
+    newDate?: string;
+    swapEventId?: string;
     reason?: string;
   }) => {
     return fetchWithAuth('/api/v1/calendar/change-requests', {

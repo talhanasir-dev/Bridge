@@ -10,6 +10,15 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import BridgetteAvatar from './BridgetteAvatar';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -17,6 +26,7 @@ import html2canvas from 'html2canvas';
 interface CalendarEvent {
   id: string;
   date: number;
+  fullDate: Date;
   type: 'custody' | 'holiday' | 'school' | 'medical' | 'activity';
   title: string;
   parent?: 'mom' | 'dad' | 'both';
@@ -27,9 +37,11 @@ interface ChangeRequest {
   id: string;
   type: 'swap' | 'modify' | 'cancel';
   requestedBy: 'mom' | 'dad';
+  requestedByEmail: string;
   originalDate: number;
   newDate?: number;
   swapWithDate?: number;
+  swapEventId?: string;
   reason: string;
   status: 'pending' | 'approved' | 'rejected';
   timestamp: Date;
@@ -64,9 +76,14 @@ import { FamilyProfile } from '@/types/family';
 
 interface CalendarViewProps {
   familyProfile: FamilyProfile | null;
+  currentUser?: {
+    email: string;
+    firstName?: string;
+    lastName?: string;
+  };
 }
 
-const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
+const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile, currentUser }) => {
   const { toast } = useToast();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [showChangeRequest, setShowChangeRequest] = useState(false);
@@ -82,59 +99,145 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
   const [declinedRequest, setDeclinedRequest] = useState<ChangeRequest | null>(null);
   const [bridgetteAlternatives, setBridgetteAlternatives] = useState<BridgetteAlternative[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isLoadingRequests, setIsLoadingRequests] = useState(false);
+  const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [newEventTitle, setNewEventTitle] = useState("");
+  const [newEventDate, setNewEventDate] = useState(() =>
+    new Date().toISOString().slice(0, 10)
+  );
+  const [newEventType, setNewEventType] =
+    useState<CalendarEvent["type"]>("custody");
+  const [newEventParent, setNewEventParent] = useState<"mom" | "dad" | "both">(
+    "both"
+  );
+  const [newEventSwappable, setNewEventSwappable] = useState(true);
+  const [creatingEvent, setCreatingEvent] = useState(false);
   const today = new Date().getDate();
   
-  // Events data - will be loaded from backend
-  const [events, setEvents] = useState<CalendarEvent[]>([
-    { id: '1', date: 15, type: 'custody', title: 'Dad\'s Weekend', parent: 'dad', isSwappable: true },
-    { id: '2', date: 18, type: 'school', title: 'Parent-Teacher Conference', parent: 'both', isSwappable: false },
-    { id: '3', date: 22, type: 'medical', title: 'Dentist Appointment', parent: 'mom', isSwappable: true },
-    { id: '4', date: 25, type: 'holiday', title: 'Christmas', parent: 'both', isSwappable: false },
-    { id: '5', date: 29, type: 'custody', title: 'Mom\'s Weekend', parent: 'mom', isSwappable: true },
-  ]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
 
-  const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([
-    {
-      id: '1',
-      type: 'swap',
-      requestedBy: 'dad',
-      originalDate: 15,
-      swapWithDate: 29,
-      reason: 'Work conference that weekend - need to swap with Mom\'s weekend',
-      status: 'pending',
-      timestamp: new Date(Date.now() - 3600000),
-      consequences: [
-        'Dad\'s weekend moves from Jan 15 to Jan 29',
-        'Mom\'s weekend moves from Jan 29 to Jan 15',
-        'Emma will be with Dad during the work week (Jan 29-31)',
-        'This affects pickup/dropoff schedule for school'
-      ],
-      originalEvent: { id: '1', date: 15, type: 'custody', title: 'Dad\'s Weekend', parent: 'dad', isSwappable: true },
-      affectedEvents: [
-        { id: '1', date: 15, type: 'custody', title: 'Dad\'s Weekend', parent: 'dad', isSwappable: true },
-        { id: '5', date: 29, type: 'custody', title: 'Mom\'s Weekend', parent: 'mom', isSwappable: true }
-      ]
-    },
-    {
-      id: '2',
-      type: 'modify',
-      requestedBy: 'mom',
-      originalDate: 22,
-      newDate: 24,
-      reason: 'Dentist had to reschedule due to emergency',
-      status: 'pending',
-      timestamp: new Date(Date.now() - 7200000),
-      consequences: [
-        'Dentist appointment moves from Jan 22 to Jan 24',
-        'This is during Dad\'s custody time - coordination needed',
-        'May conflict with Christmas Eve plans'
-      ],
-      originalEvent: { id: '3', date: 22, type: 'medical', title: 'Dentist Appointment', parent: 'mom', isSwappable: true },
-      affectedEvents: [
-        { id: '3', date: 22, type: 'medical', title: 'Dentist Appointment', parent: 'mom', isSwappable: true }
-      ]
+  const getParentRoleForEmail = (email?: string | null): 'mom' | 'dad' => {
+    if (!email || !familyProfile) return 'mom';
+    const normalized = email.toLowerCase();
+    if (familyProfile.parent1?.email?.toLowerCase() === normalized) {
+      return 'mom';
     }
-  ]);
+    return 'dad';
+  };
+
+  const mapParentLabel = (value?: string): 'mom' | 'dad' | 'both' | undefined => {
+    if (!value) return undefined;
+    if (value === 'mom' || value === 'dad' || value === 'both') {
+      return value;
+    }
+    const normalized = value.toLowerCase();
+    if (normalized.includes('both')) return 'both';
+    if (normalized.includes('mom') || normalized.includes('parent1')) return 'mom';
+    return 'dad';
+  };
+
+  const getParentDisplayName = (role: 'mom' | 'dad'): string => {
+    if (!familyProfile) {
+      return role === 'mom' ? 'Parent 1' : 'Parent 2';
+    }
+    const parent =
+      role === 'mom' ? familyProfile.parent1 : familyProfile.parent2;
+    const first = parent?.firstName || (role === 'mom' ? 'Parent 1' : 'Parent 2');
+    const last = parent?.lastName || '';
+    return `${first} ${last}`.trim();
+  };
+
+  const buildApiConsequences = (
+    requestType: ChangeRequest['type'],
+    originalEvent: CalendarEvent,
+    newDate?: number,
+    swapEvent?: CalendarEvent
+  ): string[] => {
+    const consequences: string[] = [];
+    if (requestType === 'swap' && swapEvent) {
+      consequences.push(
+        `${originalEvent.title} moves from ${originalEvent.date} to ${swapEvent.date}`
+      );
+      consequences.push(
+        `${swapEvent.title} moves from ${swapEvent.date} to ${originalEvent.date}`
+      );
+    } else if (requestType === 'modify' && newDate) {
+      consequences.push(
+        `${originalEvent.title} moves from ${originalEvent.date} to ${newDate}`
+      );
+    } else if (requestType === 'cancel') {
+      consequences.push(`${originalEvent.title} on ${originalEvent.date} will be cancelled`);
+    }
+    return consequences;
+  };
+
+  const buildCalendarEventFromSnapshot = (
+    id: string,
+    title: string,
+    type: string,
+    parent?: string,
+    isoDate?: string
+  ): CalendarEvent => {
+    const dateObj = isoDate ? new Date(isoDate) : new Date();
+    return {
+      id,
+      title,
+      type: (type as CalendarEvent['type']) || 'custody',
+      parent: mapParentLabel(parent),
+      isSwappable: true,
+      date: dateObj.getDate(),
+      fullDate: dateObj,
+    };
+  };
+
+  const mapChangeRequestFromApi = (apiRequest: any): ChangeRequest => {
+    const originalEvent = buildCalendarEventFromSnapshot(
+      apiRequest.event_id,
+      apiRequest.eventTitle || 'Schedule Event',
+      apiRequest.eventType || 'custody',
+      apiRequest.eventParent,
+      apiRequest.eventDate
+    );
+
+    const swapEvent = apiRequest.swapEventId
+      ? buildCalendarEventFromSnapshot(
+          apiRequest.swapEventId,
+          apiRequest.swapEventTitle || 'Swap Event',
+          apiRequest.eventType || 'custody',
+          apiRequest.eventParent,
+          apiRequest.swapEventDate
+        )
+      : undefined;
+
+    const newDateObj = apiRequest.newDate ? new Date(apiRequest.newDate) : undefined;
+
+    return {
+      id: apiRequest.id,
+      type: (apiRequest.requestType || 'modify') as ChangeRequest['type'],
+      requestedBy: getParentRoleForEmail(apiRequest.requestedBy_email),
+      requestedByEmail: apiRequest.requestedBy_email,
+      originalDate: originalEvent.date,
+      newDate: newDateObj?.getDate(),
+      swapWithDate: swapEvent?.date,
+      swapEventId: apiRequest.swapEventId,
+      reason: apiRequest.reason || '',
+      status: apiRequest.status || 'pending',
+      timestamp: apiRequest.createdAt ? new Date(apiRequest.createdAt) : new Date(),
+      consequences: buildApiConsequences(
+        (apiRequest.requestType || 'modify') as ChangeRequest['type'],
+        originalEvent,
+        newDateObj?.getDate(),
+        swapEvent
+      ),
+      originalEvent,
+      affectedEvents: swapEvent ? [originalEvent, swapEvent] : [originalEvent],
+      approvedBy: apiRequest.resolvedBy_email
+        ? getParentRoleForEmail(apiRequest.resolvedBy_email)
+        : undefined,
+      approvedAt: apiRequest.updatedAt ? new Date(apiRequest.updatedAt) : undefined,
+    };
+  };
 
   const [emailHistory, setEmailHistory] = useState<EmailNotification[]>([]);
 
@@ -142,6 +245,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
   useEffect(() => {
     loadEvents();
   }, [currentMonth]);
+
+  useEffect(() => {
+    loadChangeRequests();
+  }, [familyProfile]);
 
   const loadEvents = async () => {
     setIsLoadingEvents(true);
@@ -151,14 +258,18 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
       const response = await calendarAPI.getEvents(year, month);
       
       // Transform backend events to frontend format
-      const transformedEvents: CalendarEvent[] = response.map((event: any) => ({
-        id: event.id,
-        date: new Date(event.date).getDate(),
-        type: event.type as 'custody' | 'holiday' | 'school' | 'medical' | 'activity',
-        title: event.title,
-        parent: event.parent as 'mom' | 'dad' | 'both' | undefined,
-        isSwappable: event.isSwappable ?? false,
-      }));
+      const transformedEvents: CalendarEvent[] = response.map((event: any) => {
+        const eventDate = new Date(event.date);
+        return {
+          id: event.id,
+          date: eventDate.getDate(),
+          fullDate: eventDate,
+          type: event.type as 'custody' | 'holiday' | 'school' | 'medical' | 'activity',
+          title: event.title,
+          parent: event.parent as 'mom' | 'dad' | 'both' | undefined,
+          isSwappable: event.isSwappable ?? false,
+        };
+      });
       
       setEvents(transformedEvents);
     } catch (error) {
@@ -171,6 +282,26 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
       // Keep mock data on error
     } finally {
       setIsLoadingEvents(false);
+    }
+  };
+
+  const loadChangeRequests = async () => {
+    setIsLoadingRequests(true);
+    try {
+      const response = await calendarAPI.getChangeRequests();
+      const mapped: ChangeRequest[] = response.map((req: any) =>
+        mapChangeRequestFromApi(req)
+      );
+      setChangeRequests(mapped);
+    } catch (error) {
+      console.error('Error loading change requests:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load change requests.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoadingRequests(false);
     }
   };
 
@@ -249,9 +380,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
         id: '1',
         type: 'partial-swap',
         title: 'Partial Weekend Swap',
-        description: `Instead of swapping entire weekends, what if ${request.requestedBy === 'mom' ? 'Mike' : 'you'} just takes Saturday ${request.originalDate}th and you keep Sunday? This maintains most of your original schedule.`,
+        description: `Instead of swapping entire weekends, what if ${request.requestedBy === 'mom' ? 'your co-parent' : 'you'} just takes Saturday ${request.originalDate}th and you keep Sunday? This maintains most of your original schedule.`,
         impact: 'minimal',
-        suggestion: 'This keeps the custody balance almost identical and reduces disruption to Emma\'s routine.',
+        suggestion: 'This keeps the custody balance almost identical and reduces disruption to the routine.',
         actionText: 'Suggest Partial Swap',
         originalRequestId: request.id
       });
@@ -262,9 +393,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
         id: '2',
         type: 'different-date',
         title: 'Different Weekend Option',
-        description: `What about ${currentMonthName} ${alternativeDate}th instead? This avoids conflicts with your current schedule and maintains the custody agreement balance.`,
+        description: `What about ${currentMonthName} ${alternativeDate}th instead? This avoids conflicts with the current schedule and maintains the custody agreement balance.`,
         impact: 'low',
-        suggestion: 'This option keeps all existing arrangements intact while still helping with the work conference.',
+        suggestion: 'This option keeps all existing arrangements intact while still helping with the schedule challenge.',
         actionText: 'Suggest Alternative Date',
         originalRequestId: request.id
       });
@@ -274,9 +405,9 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
         id: '3',
         type: 'makeup-time',
         title: 'Makeup Time Solution',
-        description: `${request.requestedBy === 'mom' ? 'Mike' : 'You'} could take an extra day during the week (like Wednesday evening) to make up for missing the weekend. This maintains custody balance.`,
+        description: `${request.requestedBy === 'mom' ? 'Your co-parent' : 'You'} could take an extra day during the week (like Wednesday evening) to make up for missing the weekend. This maintains custody balance.`,
         impact: 'low',
-        suggestion: 'This approach preserves your weekend plans while ensuring fair custody time distribution.',
+        suggestion: 'This approach preserves weekend plans while ensuring fair custody time distribution.',
         actionText: 'Suggest Makeup Time',
         originalRequestId: request.id
       });
@@ -286,7 +417,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
         id: '4',
         type: 'split-event',
         title: 'Coordinate During Transition',
-        description: `Since the dentist appointment is during ${request.requestedBy === 'mom' ? 'Mike\'s' : 'your'} custody time, what if you both go together? This shows co-parenting cooperation.`,
+        description: `Since the appointment is during ${request.requestedBy === 'mom' ? 'your co-parent\'s' : 'your'} custody time, what if you both go together? This shows co-parenting cooperation.`,
         impact: 'minimal',
         suggestion: 'Joint attendance at medical appointments demonstrates unified parenting and is often appreciated by healthcare providers.',
         actionText: 'Suggest Joint Attendance',
@@ -355,8 +486,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
     const currentMonthName = monthNames[currentMonth.getMonth()];
     const currentYear = currentMonth.getFullYear();
     
-    const requestedByName = request.requestedBy === 'mom' ? 'Sarah Johnson' : 'Michael Johnson';
-    const approvedByName = request.approvedBy === 'mom' ? 'Sarah Johnson' : 'Michael Johnson';
+    const requestedByName = getParentDisplayName(request.requestedBy);
+    const approvedByName = request.approvedBy
+      ? getParentDisplayName(request.approvedBy)
+      : getParentDisplayName(request.requestedBy === 'mom' ? 'dad' : 'mom');
     
     const formatDate = (date: number) => `${currentMonthName} ${date}, ${currentYear}`;
     
@@ -593,23 +726,41 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
     setCurrentMonth(newMonth);
   };
 
+  const openCreateEventModal = () => {
+    const nowDate = new Date();
+    const sameMonth =
+      nowDate.getFullYear() === currentMonth.getFullYear() &&
+      nowDate.getMonth() === currentMonth.getMonth();
+    const defaultDay = sameMonth ? nowDate.getDate() : 1;
+    const daysInMonth = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth() + 1,
+      0
+    ).getDate();
+    const clampedDay = Math.min(defaultDay, daysInMonth);
+    const defaultDate = new Date(
+      currentMonth.getFullYear(),
+      currentMonth.getMonth(),
+      clampedDay
+    );
+    setNewEventDate(defaultDate.toISOString().slice(0, 10));
+    setNewEventTitle("");
+    setNewEventType("custody");
+    setNewEventParent("both");
+    setNewEventSwappable(true);
+    setShowCreateEvent(true);
+  };
+
   const createNewEvent = async (eventData: {
-    date: number;
+    date: Date;
     type: string;
     title: string;
     parent?: string;
     isSwappable?: boolean;
   }) => {
     try {
-      const eventDate = new Date(
-        currentMonth.getFullYear(),
-        currentMonth.getMonth(),
-        eventData.date
-      );
-
       await calendarAPI.createEvent({
-        family_id: 'current-family-id', // In real app, get from context/state
-        date: eventDate.toISOString(),
+        date: eventData.date.toISOString(),
         type: eventData.type,
         title: eventData.title,
         parent: eventData.parent,
@@ -630,6 +781,46 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
         description: error instanceof Error ? error.message : "Failed to create event.",
         variant: "destructive",
       });
+    }
+  };
+
+  const handleCreateEventSubmit = async (
+    event: React.FormEvent<HTMLFormElement>
+  ) => {
+    event.preventDefault();
+    if (!newEventTitle.trim()) {
+      toast({
+        title: "Title required",
+        description: "Please provide a name for the event.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const parsedDate = new Date(newEventDate);
+    if (Number.isNaN(parsedDate.getTime())) {
+      toast({
+        title: "Invalid date",
+        description: "Please pick a valid date for this event.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCreatingEvent(true);
+    try {
+      await createNewEvent({
+        date: parsedDate,
+        type: newEventType,
+        title: newEventTitle.trim(),
+        parent: newEventParent,
+        isSwappable: newEventSwappable,
+      });
+      setShowCreateEvent(false);
+    } catch (error) {
+      // toast already handled inside createNewEvent
+    } finally {
+      setCreatingEvent(false);
     }
   };
 
@@ -682,83 +873,122 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
     return consequences;
   };
 
-  const submitChangeRequest = () => {
+  const submitChangeRequest = async () => {
     if (!selectedEvent || !changeReason.trim()) return;
 
-    const newRequest: ChangeRequest = {
-      id: Date.now().toString(),
-      type: changeType,
-      requestedBy: 'mom', // In real app, this would be the current user
-      originalDate: selectedEvent.date,
-      newDate: changeType === 'modify' ? newDate : undefined,
-      swapWithDate: changeType === 'swap' ? swapDate : undefined,
+    const payload: {
+      event_id: string;
+      requestType: 'swap' | 'modify' | 'cancel';
+      reason: string;
+      newDate?: string;
+      swapEventId?: string;
+    } = {
+      event_id: selectedEvent.id,
+      requestType: changeType,
       reason: changeReason,
-      status: 'pending',
-      timestamp: new Date(),
-      consequences: calculateConsequences(),
-      originalEvent: selectedEvent,
-      affectedEvents: changeType === 'swap' && swapDate ? 
-        [selectedEvent, ...events.filter(e => e.date === swapDate)] : 
-        [selectedEvent]
     };
 
-    setChangeRequests(prev => [newRequest, ...prev]);
-    setShowChangeRequest(false);
-    setSelectedEvent(null);
-    setChangeReason('');
-    setSwapDate(null);
-    setNewDate(null);
+    if (changeType === 'modify') {
+      if (!newDate) {
+        toast({
+          title: "New date required",
+          description: "Select a new date for this modification.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const newDateObj = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth(),
+        newDate
+      );
+      payload.newDate = newDateObj.toISOString();
+    }
+
+    if (changeType === 'swap') {
+      if (!swapDate) {
+        toast({
+          title: "Swap date required",
+          description: "Select the date you want to swap with.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const swapEvent = events.find(e => e.date === swapDate);
+      if (!swapEvent) {
+        toast({
+          title: "Event not found",
+          description: "The event you're trying to swap with could not be found.",
+          variant: "destructive",
+        });
+        return;
+      }
+      payload.swapEventId = swapEvent.id;
+    }
+
+    try {
+      await calendarAPI.createChangeRequest(payload);
+      toast({
+        title: "Change request submitted",
+        description: "We'll notify your co-parent to review this request.",
+      });
+      setShowChangeRequest(false);
+      setSelectedEvent(null);
+      setChangeReason('');
+      setSwapDate(null);
+      setNewDate(null);
+      await loadChangeRequests();
+    } catch (error) {
+      console.error('Error submitting change request:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to submit change request.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleRequestResponse = (requestId: string, response: 'approved' | 'rejected') => {
-    const updatedRequest = changeRequests.find(r => r.id === requestId);
-    if (!updatedRequest) return;
+  const handleRequestResponse = async (requestId: string, response: 'approved' | 'rejected') => {
+    const existingRequest = changeRequests.find(r => r.id === requestId);
+    if (!existingRequest) return;
 
-    // Update request status
-    const updatedRequestWithApproval: ChangeRequest = {
-      ...updatedRequest,
-      status: response,
-      approvedBy: response === 'approved' ? ('dad' as 'mom' | 'dad') : undefined,
-      approvedAt: response === 'approved' ? new Date() : undefined
-    };
+    try {
+      await calendarAPI.updateChangeRequest(requestId, response);
 
-    setChangeRequests(prev => prev.map(req => 
-      req.id === requestId ? updatedRequestWithApproval : req
-    ));
-
-    if (response === 'approved') {
-      // Apply the changes to the calendar
-      if (updatedRequestWithApproval.type === 'swap' && updatedRequestWithApproval.swapWithDate) {
-        setEvents(prev => prev.map(event => {
-          if (event.id === updatedRequestWithApproval.originalEvent.id) {
-            return { ...event, date: updatedRequestWithApproval.swapWithDate! };
-          }
-          if (event.date === updatedRequestWithApproval.swapWithDate) {
-            return { ...event, date: updatedRequestWithApproval.originalDate };
-          }
-          return event;
-        }));
-      } else if (updatedRequestWithApproval.type === 'modify' && updatedRequestWithApproval.newDate) {
-        setEvents(prev => prev.map(event => 
-          event.id === updatedRequestWithApproval.originalEvent.id 
-            ? { ...event, date: updatedRequestWithApproval.newDate! }
-            : event
-        ));
-      } else if (updatedRequestWithApproval.type === 'cancel') {
-        setEvents(prev => prev.filter(event => event.id !== updatedRequestWithApproval.originalEvent.id));
+      if (response === 'approved') {
+        const approvedRequest: ChangeRequest = {
+          ...existingRequest,
+          status: 'approved',
+          approvedBy: getParentRoleForEmail(currentUser?.email),
+          approvedAt: new Date(),
+        };
+        const email = generateApprovalEmail(approvedRequest);
+        setGeneratedEmail(email);
+        setEmailHistory(prev => [email, ...prev]);
+        setShowEmailPreview(true);
+        toast({
+          title: "Request approved",
+          description: "The calendar has been updated.",
+        });
+      } else {
+        setDeclinedRequest(existingRequest);
+        const alternatives = generateBridgetteAlternatives(existingRequest);
+        setBridgetteAlternatives(alternatives);
+        setShowBridgetteAlternatives(true);
+        toast({
+          title: "Request rejected",
+          description: "Consider sharing an alternative solution.",
+        });
       }
 
-      // Generate and show email
-      const email = generateApprovalEmail(updatedRequestWithApproval);
-      setGeneratedEmail(email);
-      setEmailHistory(prev => [email, ...prev]);
-      setShowEmailPreview(true);
-    } else if (response === 'rejected') {
-      // Show Bridgette alternatives when request is declined
-      setDeclinedRequest(updatedRequestWithApproval);
-      const alternatives = generateBridgetteAlternatives(updatedRequestWithApproval);
-      setBridgetteAlternatives(alternatives);
-      setShowBridgetteAlternatives(true);
+      await Promise.all([loadEvents(), loadChangeRequests()]);
+    } catch (error) {
+      console.error('Error updating change request:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update change request.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -949,7 +1179,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
             >
               <ChevronRight className="w-4 h-4" />
             </Button>
-            <Button size="sm" className="ml-4">
+            <Button size="sm" className="ml-4" onClick={openCreateEventModal}>
               <Plus className="w-4 h-4 mr-2" />
               Add Event
             </Button>
@@ -1043,7 +1273,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
           })}
         </div>
 
-        {/* Legend */}
+      {/* Legend */}
         <div className="mt-6 flex flex-wrap gap-4 text-sm">
           <div className="flex items-center">
             <div className="w-3 h-3 bg-blue-200 rounded mr-2"></div>
@@ -1079,6 +1309,105 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
           </div>
         </div>
       </div>
+
+      {/* Create Event Dialog */}
+      <Dialog open={showCreateEvent} onOpenChange={setShowCreateEvent}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Calendar Event</DialogTitle>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleCreateEventSubmit}>
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input
+                placeholder="e.g., Mom's Weekend"
+                value={newEventTitle}
+                onChange={(e) => setNewEventTitle(e.target.value)}
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Date</Label>
+                <Input
+                  type="date"
+                  value={newEventDate}
+                  onChange={(e) => setNewEventDate(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Event Type</Label>
+                <Select
+                  value={newEventType}
+                  onValueChange={(value) =>
+                    setNewEventType(value as CalendarEvent["type"])
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="custody">Custody</SelectItem>
+                    <SelectItem value="holiday">Holiday</SelectItem>
+                    <SelectItem value="school">School</SelectItem>
+                    <SelectItem value="medical">Medical</SelectItem>
+                    <SelectItem value="activity">Activity</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Parent responsible</Label>
+              <Select
+                value={newEventParent}
+                onValueChange={(value) =>
+                  setNewEventParent(value as "mom" | "dad" | "both")
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select parent" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mom">
+                    {getParentDisplayName("mom")}
+                  </SelectItem>
+                  <SelectItem value="dad">
+                    {getParentDisplayName("dad")}
+                  </SelectItem>
+                  <SelectItem value="both">Both parents</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
+              <div>
+                <Label className="text-base">Allow schedule swaps</Label>
+                <p className="text-sm text-gray-500">
+                  Enable change requests for this event.
+                </p>
+              </div>
+              <Switch
+                checked={newEventSwappable}
+                onCheckedChange={setNewEventSwappable}
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowCreateEvent(false)}
+                disabled={creatingEvent}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" disabled={creatingEvent}>
+                {creatingEvent ? "Creating..." : "Create Event"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Change Request Dialog */}
       <Dialog open={showChangeRequest} onOpenChange={setShowChangeRequest}>
@@ -1278,7 +1607,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
                   <div className="flex items-center justify-between">
                     <CardTitle className="text-lg flex items-center">
                       <User className="w-5 h-5 mr-2 text-blue-600" />
-                      {request.requestedBy === 'mom' ? 'You' : 'Mike'} wants to {request.type} a date
+                      {request.requestedBy === 'mom' ? 'You' : 'Your co-parent'} wants to {request.type} a date
                     </CardTitle>
                     <Badge variant="outline" className="border-orange-300 text-orange-600">
                       {request.type}
@@ -1385,7 +1714,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({ familyProfile }) => {
                 <CardContent>
                   <div className="text-sm text-orange-700">
                     <p><strong>Type:</strong> {declinedRequest.type}</p>
-                    <p><strong>Requested by:</strong> {declinedRequest.requestedBy === 'mom' ? 'You' : 'Mike'}</p>
+                    <p><strong>Requested by:</strong> {declinedRequest.requestedBy === 'mom' ? 'You' : 'Your co-parent'}</p>
                     <p><strong>Reason:</strong> {declinedRequest.reason}</p>
                   </div>
                 </CardContent>

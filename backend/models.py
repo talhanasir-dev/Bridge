@@ -96,13 +96,25 @@ class ChangeRequest(BaseModel):
     event_id: str
     requestedBy_email: str  # Email of the user who requested the change
     status: str = "pending"  # pending, approved, rejected
-    requestedDate: Optional[datetime] = None  # New date if requesting a date change
     reason: Optional[str] = None
     createdAt: datetime
+    updatedAt: Optional[datetime] = None
+    resolvedBy_email: Optional[str] = None
+    requestType: str  # swap, modify, cancel
+    eventTitle: str
+    eventType: str
+    eventParent: Optional[str] = None
+    eventDate: datetime
+    newDate: Optional[datetime] = None
+    swapEventId: Optional[str] = None
+    swapEventTitle: Optional[str] = None
+    swapEventDate: Optional[datetime] = None
 
 class ChangeRequestCreate(BaseModel):
     event_id: str
-    requestedDate: Optional[datetime] = None
+    requestType: str
+    newDate: Optional[datetime] = None
+    swapEventId: Optional[str] = None
     reason: Optional[str] = None
 
 class ChangeRequestUpdate(BaseModel):

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, BookOpen, Scale, AlertTriangle, HelpCircle, Baby, LogOut, UserCheck, UserX, BarChart3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Tabs, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import ProgressBar from '@/components/ProgressBar';
 import QuickActionCard from '@/components/QuickActionCard';
 import CalendarView from '@/components/CalendarView';
@@ -1082,6 +1082,33 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
         )}
 
         <Tabs value={activeTab} onValueChange={changeTab} className="space-y-6">
+          <TabsList className="grid w-full grid-cols-6 bg-white rounded-xl shadow-sm p-1 border-2 border-gray-200">
+            <TabsTrigger value="dashboard" className="flex items-center space-x-2 data-[state=active]:bg-bridge-blue data-[state=active]:text-white">
+              <Home className="w-4 h-4" />
+              <span className="hidden sm:inline">Dashboard</span>
+            </TabsTrigger>
+            <TabsTrigger value="calendar" className="flex items-center space-x-2 data-[state=active]:bg-bridge-green data-[state=active]:text-white">
+              <Calendar className="w-4 h-4" />
+              <span className="hidden sm:inline">Calendar</span>
+            </TabsTrigger>
+            <TabsTrigger value="messages" className="flex items-center space-x-2 data-[state=active]:bg-bridge-yellow data-[state=active]:text-bridge-black">
+              <MessageSquare className="w-4 h-4" />
+              <span className="hidden sm:inline">Messages</span>
+            </TabsTrigger>
+            <TabsTrigger value="expenses" className="flex items-center space-x-2 data-[state=active]:bg-bridge-red data-[state=active]:text-white">
+              <DollarSign className="w-4 h-4" />
+              <span className="hidden sm:inline">Expenses</span>
+            </TabsTrigger>
+            <TabsTrigger value="documents" className="flex items-center space-x-2 data-[state=active]:bg-gray-600 data-[state=active]:text-white">
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">Documents</span>
+            </TabsTrigger>
+            <TabsTrigger value="resources" className="flex items-center space-x-2 data-[state=active]:bg-bridge-blue data-[state=active]:text-white">
+              <BookOpen className="w-4 h-4" />
+              <span className="hidden sm:inline">Resources</span>
+            </TabsTrigger>
+          </TabsList>
+
           <TabsContent value="dashboard" className="space-y-6">
             <Card className="bg-gradient-to-r from-bridge-blue to-bridge-green border-2 border-bridge-blue overflow-hidden">
               <CardContent className="p-6">
@@ -1240,7 +1267,7 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
           </TabsContent>
 
           <TabsContent value="calendar">
-            <CalendarView familyProfile={familyProfile} />
+            <CalendarView familyProfile={familyProfile} currentUser={currentUser || undefined} />
           </TabsContent>
 
           <TabsContent value="messages">
