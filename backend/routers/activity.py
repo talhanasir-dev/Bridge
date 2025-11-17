@@ -38,29 +38,48 @@ async def get_recent_activity(current_user: User = Depends(get_current_user)):
         expense_activities = []
         
         # 1. Get calendar activities (last 2)
-        # Get recent calendar events (last 30 days for more options)
-        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        # Get recently created/updated calendar events (last 7 days)
         recent_events = list(db.events.find({
             "family_id": family_id,
-            "date": {"$gte": thirty_days_ago.timestamp()}
-        }).sort("date", -1).limit(20))
+            "$or": [
+                {"createdAt": {"$gte": seven_days_ago}},
+                {"updatedAt": {"$gte": seven_days_ago}}
+            ]
+        }).sort("createdAt", -1).limit(20))
         
         for event in recent_events:
             if len(calendar_activities) >= 2:
                 break
-                
-            event_date = datetime.fromtimestamp(event["date"])
+            
+            # Handle date field - could be datetime or timestamp
+            event_date_obj = event.get("date")
+            if isinstance(event_date_obj, datetime):
+                event_date = event_date_obj
+            elif isinstance(event_date_obj, (int, float)):
+                event_date = datetime.fromtimestamp(event_date_obj)
+            else:
+                try:
+                    event_date = datetime.fromisoformat(str(event_date_obj))
+                except:
+                    event_date = datetime.utcnow()
+            
             event_title = event.get("title", "Calendar event")
             
             # Check if there's a confirmed change request for this event
             change_requests = list(db.change_requests.find({
                 "event_id": str(event.get("_id", "")),
                 "status": "approved"
-            }).sort("updated_at", -1).limit(1))
+            }).sort("updatedAt", -1).limit(1))
+            
+            # Determine who created/updated this event
+            event_created_at = event.get("createdAt")
+            event_updated_at = event.get("updatedAt")
+            is_recently_created = event_created_at and event_created_at >= seven_days_ago
+            is_recently_updated = event_updated_at and event_updated_at >= seven_days_ago and event_updated_at != event_created_at
             
             if change_requests:
                 # This is a confirmed pickup/dropoff
-                confirmed_by = change_requests[0].get("requested_by_email", "")
+                confirmed_by = change_requests[0].get("requestedBy_email", "")
                 confirmed_by_name = partner_name if confirmed_by != current_user.email else current_user_name
                 
                 calendar_activities.append({
@@ -69,21 +88,36 @@ async def get_recent_activity(current_user: User = Depends(get_current_user)):
                     "title": f"{confirmed_by_name} confirmed pickup for {event_date.strftime('%A at %I:%M%p')}",
                     "description": event_title,
                     "color": "green",
-                    "createdAt": change_requests[0].get("updated_at") or change_requests[0].get("created_at"),
+                    "createdAt": change_requests[0].get("updatedAt") or change_requests[0].get("createdAt") or datetime.utcnow(),
                     "actionRequired": False,
                 })
-            elif event.get("parent") and event.get("parent") != "both":
-                # Regular custody event
+            elif is_recently_created:
+                # Newly created event
                 event_parent = event.get("parent")
-                parent_name = parent1_name if event_parent == "mom" else (parent2_name or "Parent 2")
+                if event_parent and event_parent != "both":
+                    parent_name = parent1_name if event_parent == "mom" else (parent2_name or "Parent 2")
+                    description = f"{parent_name}'s custody day"
+                else:
+                    description = "Family event"
                 
                 calendar_activities.append({
                     "id": f"calendar_{event.get('_id', '')}",
                     "type": "calendar_update",
-                    "title": f"Calendar updated: {event_title}",
-                    "description": f"{parent_name}'s custody day",
+                    "title": f"Calendar event added: {event_title}",
+                    "description": description,
                     "color": "blue",
-                    "createdAt": event.get("created_at") or datetime.utcnow(),
+                    "createdAt": event_created_at or datetime.utcnow(),
+                    "actionRequired": False,
+                })
+            elif is_recently_updated:
+                # Recently updated event
+                calendar_activities.append({
+                    "id": f"calendar_update_{event.get('_id', '')}",
+                    "type": "calendar_update",
+                    "title": f"Calendar event updated: {event_title}",
+                    "description": "Event details were modified",
+                    "color": "blue",
+                    "createdAt": event_updated_at or datetime.utcnow(),
                     "actionRequired": False,
                 })
         
@@ -91,8 +125,8 @@ async def get_recent_activity(current_user: User = Depends(get_current_user)):
         pending_requests = list(db.change_requests.find({
             "family_id": family_id,
             "status": "pending",
-            "requested_by_email": {"$ne": current_user.email}
-        }).sort("created_at", -1).limit(2))
+            "requestedBy_email": {"$ne": current_user.email}
+        }).sort("createdAt", -1).limit(2))
         
         for req in pending_requests:
             if len(calendar_activities) >= 2:
@@ -102,18 +136,22 @@ async def get_recent_activity(current_user: User = Depends(get_current_user)):
             event = None
             if event_id:
                 try:
-                    event = db.events.find_one({"_id": ObjectId(event_id)})
+                    # Try to find by id field first, then _id
+                    event = db.events.find_one({"id": event_id})
+                    if not event:
+                        event = db.events.find_one({"_id": ObjectId(event_id)})
                 except:
                     pass
             
             event_title = event.get("title", "calendar event") if event else "calendar event"
+            request_type = req.get("requestType", "modify")
             calendar_activities.append({
                 "id": f"change_request_{req.get('_id', '')}",
                 "type": "change_request",
                 "title": f"PENDING: {partner_name} requested change to {event_title}",
-                "description": f"Change request: {req.get('type', 'modify')}",
+                "description": f"Change request: {request_type}",
                 "color": "red",
-                "createdAt": req.get("created_at"),
+                "createdAt": req.get("createdAt") or datetime.utcnow(),
                 "actionRequired": True,
             })
         
@@ -132,22 +170,26 @@ async def get_recent_activity(current_user: User = Depends(get_current_user)):
                 break
                 
             # Get the last message
+            conv_id = str(conv.get("_id", ""))
             messages = list(db.messages.find({
-                "conversation_id": str(conv.get("_id", ""))
-            }).sort("created_at", -1).limit(1))
+                "conversation_id": conv_id
+            }).sort("timestamp", -1).limit(1))
             
             if messages:
                 last_message = messages[0]
                 sender_email = last_message.get("sender_email", "")
                 sender_name = current_user_name if sender_email == current_user.email else partner_name
                 
+                message_content = last_message.get("content", "")
+                truncated_content = message_content[:50] + "..." if len(message_content) > 50 else message_content
+                
                 message_activities.append({
                     "id": f"message_{conv.get('_id', '')}",
                     "type": "message",
                     "title": f"New message in {conv.get('subject', 'conversation')}",
-                    "description": last_message.get("content", "")[:50] + "..." if len(last_message.get("content", "")) > 50 else last_message.get("content", ""),
+                    "description": truncated_content,
                     "color": "blue",
-                    "createdAt": last_message.get("created_at") or conv.get("last_message_at"),
+                    "createdAt": last_message.get("timestamp") or conv.get("last_message_at") or datetime.utcnow(),
                     "actionRequired": False,
                 })
         
@@ -164,8 +206,15 @@ async def get_recent_activity(current_user: User = Depends(get_current_user)):
         for exp in all_expenses:
             if len(expense_activities) >= 2:
                 break
+            
+            exp_created_at = exp.get("created_at")
+            exp_updated_at = exp.get("updated_at")
+            is_recent = (exp_created_at and exp_created_at >= seven_days_ago) or (exp_updated_at and exp_updated_at >= seven_days_ago)
+            
+            if not is_recent:
+                continue
                 
-            if exp["status"] == "pending" and exp["paid_by_email"] != current_user.email:
+            if exp["status"] == "pending" and exp.get("paid_by_email") != current_user.email:
                 # Pending expense from partner
                 expense_activities.append({
                     "id": f"expense_{exp.get('id') or str(exp.get('_id', ''))}",
@@ -175,12 +224,13 @@ async def get_recent_activity(current_user: User = Depends(get_current_user)):
                     "amount": exp["amount"],
                     "expenseId": exp.get("id") or str(exp.get("_id", "")),
                     "color": "red",
-                    "createdAt": exp.get("created_at") or exp.get("updated_at"),
+                    "createdAt": exp_updated_at or exp_created_at or datetime.utcnow(),
                     "actionRequired": True,
                 })
-            elif exp["status"] == "approved":
+            elif exp["status"] == "approved" and exp_updated_at and exp_updated_at >= seven_days_ago:
                 # Recently approved expense
-                paid_by_name = current_user_name if exp["paid_by_email"] == current_user.email else partner_name
+                paid_by_email = exp.get("paid_by_email", "")
+                paid_by_name = current_user_name if paid_by_email == current_user.email else partner_name
                 expense_activities.append({
                     "id": f"expense_{exp.get('id') or str(exp.get('_id', ''))}",
                     "type": "expense_approved",
@@ -189,7 +239,7 @@ async def get_recent_activity(current_user: User = Depends(get_current_user)):
                     "amount": exp["amount"],
                     "expenseId": exp.get("id") or str(exp.get("_id", "")),
                     "color": "green",
-                    "createdAt": exp.get("updated_at") or exp.get("created_at"),
+                    "createdAt": exp_updated_at or exp_created_at or datetime.utcnow(),
                     "actionRequired": False,
                 })
         

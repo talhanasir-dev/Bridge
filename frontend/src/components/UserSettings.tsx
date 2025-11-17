@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { User, Bell, Shield, Palette, Globe, Heart, Save, Edit, Camera, MessageSquare, BookOpen, Languages, ArrowLeft } from 'lucide-react';
+import { User, Bell, Shield, Palette, Globe, Heart, Save, Edit, Camera, MessageSquare, BookOpen, Languages, ArrowLeft, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { Textarea } from '@/components/ui/textarea';
 import AnimatedBridgette from './AnimatedBridgette';
 import { FamilyProfile } from '@/types/family';
 import { authAPI } from '@/lib/api';
+import { useToast } from '@/hooks/use-toast';
 
 type UserProfileInfo = {
   firstName?: string;
@@ -29,6 +30,7 @@ interface UserSettingsProps {
 }
 
 const UserSettings: React.FC<UserSettingsProps> = ({ onBack, initialProfile, familyProfile }) => {
+  const { toast } = useToast();
   const [bridgetteExpression, setBridgetteExpression] = useState<'thinking' | 'encouraging' | 'celebrating' | 'balanced' | 'mediating'>('encouraging');
   const [bridgetteMessage, setBridgetteMessage] = useState("Let's make sure your Bridge experience is perfect for you! I'm here to help with any changes you'd like to make! ⚙️");
   const [hasChanges, setHasChanges] = useState(false);
@@ -254,6 +256,26 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack, initialProfile, fam
     }, 3000);
   };
 
+  const handleCopyFamilyCode = async () => {
+    if (!familyProfile?.familyCode) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(familyProfile.familyCode);
+      toast({
+        title: 'Family code copied',
+        description: 'Share it with your co-parent when they join Bridge.',
+      });
+    } catch (error) {
+      console.error('Failed to copy family code:', error);
+      toast({
+        title: 'Unable to copy code',
+        description: 'Please highlight the code and copy it manually.',
+        variant: 'destructive',
+      });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 p-4">
       <div className="max-w-6xl mx-auto">
@@ -308,7 +330,7 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack, initialProfile, fam
               
               <CardContent>
                 <Tabs defaultValue="profile" className="space-y-6">
-                  <TabsList className="grid w-full grid-cols-6">
+                  <TabsList className="grid w-full grid-cols-7">
                     <TabsTrigger value="profile" className="flex items-center space-x-1">
                       <User className="w-4 h-4" />
                       <span className="hidden sm:inline">Profile</span>
@@ -328,6 +350,10 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack, initialProfile, fam
                     <TabsTrigger value="bridgette" className="flex items-center space-x-1">
                       <Heart className="w-4 h-4" />
                       <span className="hidden sm:inline">Bridgette</span>
+                    </TabsTrigger>
+                    <TabsTrigger value="family" className="flex items-center space-x-1">
+                      <Globe className="w-4 h-4" />
+                      <span className="hidden sm:inline">Family</span>
                     </TabsTrigger>
                   </TabsList>
 
@@ -707,6 +733,75 @@ const UserSettings: React.FC<UserSettingsProps> = ({ onBack, initialProfile, fam
                   </TabsContent>
 
                   
+                  <TabsContent value="family" className="space-y-6">
+                    <Card className="border-2 border-green-200 bg-green-50 shadow-sm">
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-green-800">
+                          <Globe className="w-5 h-5" />
+                          Family Profile & Code
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-6">
+                        {familyProfile ? (
+                          <>
+                            {/* Family Summary Banner */}
+                            <div className="border-2 border-green-200 bg-green-50 rounded-lg p-4">
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center space-x-4">
+                                  <Users className="w-8 h-8 text-green-600" />
+                                  <div>
+                                    <h3 className="font-semibold text-gray-800">{familyProfile.familyName || 'Your Family'}</h3>
+                                    <p className="text-sm text-gray-600">
+                                      {familyProfile.children.length} {familyProfile.children.length === 1 ? 'child' : 'children'} • 
+                                      {familyProfile.custodyArrangement === '50-50' ? ' 50/50 custody' : 
+                                       familyProfile.custodyArrangement === 'primary-secondary' ? ' Primary/Secondary custody' : 
+                                       ' Custom custody'}
+                                      {familyProfile.differentTimezones && ' • Different time zones'}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="flex space-x-2">
+                                  {familyProfile.children.map((child) => (
+                                    <div key={child.id} className="w-10 h-10 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                                      {child.firstName[0]}
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="border rounded-lg bg-white/80 p-4">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-green-700 mb-2">
+                                Family Code
+                              </p>
+                              <div className="flex flex-wrap items-center gap-3">
+                                <span className="font-mono text-lg bg-white px-4 py-2 rounded-md border border-green-200 text-green-800 shadow-sm">
+                                  {familyProfile.familyCode || 'Not yet generated'}
+                                </span>
+                                {familyProfile.familyCode && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleCopyFamilyCode}
+                                    className="border-green-200 text-green-700 hover:bg-green-100"
+                                  >
+                                    Copy
+                                  </Button>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-3">
+                                Share this code with your co-parent when they create their own Bridge account so they can link to this family.
+                              </p>
+                            </div>
+                          </>
+                        ) : (
+                          <div className="rounded-lg border border-dashed border-green-200 bg-white/70 p-6 text-center text-sm text-green-800">
+                            Complete your family onboarding to generate a Family Code.
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
                 </Tabs>
               </CardContent>
             </Card>

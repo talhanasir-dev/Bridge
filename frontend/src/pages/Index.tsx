@@ -1126,54 +1126,6 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
        `}</style>
 
       <div className="space-y-6">
-        {/* Family Profile Summary */}
-        {familyProfile && (
-          <Card className="mb-6 border-2 border-green-200 bg-green-50">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-4">
-                  <Users className="w-8 h-8 text-green-600" />
-                  <div>
-                    <h3 className="font-semibold text-gray-800">{familyProfile.familyName || 'Your Family'}</h3>
-                    <p className="text-sm text-gray-600">
-                      {familyProfile.children.length} {familyProfile.children.length === 1 ? 'child' : 'children'} • 
-                      {familyProfile.custodyArrangement === '50-50' ? ' 50/50 custody' : 
-                       familyProfile.custodyArrangement === 'primary-secondary' ? ' Primary/Secondary custody' : 
-                       ' Custom custody'}
-                      {familyProfile.differentTimezones && ' • Different time zones'}
-                    </p>
-                    {familyProfile.familyCode && (
-                      <div className="mt-3 flex flex-wrap items-center gap-3">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-green-700">
-                          Family Code
-                        </span>
-                        <span className="font-mono text-sm bg-white px-3 py-1 rounded-md border border-green-200 text-green-700 shadow-sm">
-                          {familyProfile.familyCode}
-                        </span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={handleCopyFamilyCode}
-                          className="border-green-200 text-green-700 hover:bg-green-100"
-                        >
-                          Copy
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  {familyProfile.children.map((child) => (
-                    <div key={child.id} className="w-10 h-10 bg-gradient-to-br from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                      {child.firstName[0]}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         <Tabs value={activeTab} onValueChange={changeTab} className="space-y-6">
           <TabsList className="grid w-full grid-cols-6 bg-white rounded-xl shadow-sm p-1 border-2 border-gray-200">
             <TabsTrigger value="dashboard" className="flex items-center space-x-2 data-[state=active]:bg-bridge-blue data-[state=active]:text-white">

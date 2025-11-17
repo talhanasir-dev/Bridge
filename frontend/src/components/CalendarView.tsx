@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Edit3, ArrowRightLeft, Clock, CheckCircle, XCircle, AlertTriangle, Calendar as CalendarIcon, User, Mail, FileText, Lightbulb, SkipForward, ThumbsUp, MessageCircle } from 'lucide-react';
-import { calendarAPI } from '@/lib/api';
+import { ChevronLeft, ChevronRight, Plus, Edit3, ArrowRightLeft, Clock, CheckCircle, XCircle, AlertTriangle, Calendar as CalendarIcon, User, Mail, FileText, Lightbulb, SkipForward, ThumbsUp, MessageCircle, DollarSign } from 'lucide-react';
+import { calendarAPI, expensesAPI, documentsAPI } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -43,6 +43,22 @@ interface CalendarEvent {
   parent?: 'mom' | 'dad' | 'both';
   isSwappable?: boolean;
   hasTime?: boolean;
+}
+
+interface DayExpense {
+  id: string;
+  description: string;
+  amount?: number;
+  status?: string;
+  date: Date;
+}
+
+interface DayDocument {
+  id: string;
+  name: string;
+  type?: string;
+  folder?: string;
+  uploadDate: Date;
 }
 
 interface ChangeRequest {
@@ -96,6 +112,23 @@ interface CalendarViewProps {
   onNavigateToMessages?: () => void;
 }
 
+const formatDateInputValue = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const hasTimeZoneInfo = (value: string) => /([zZ]|[+-]\d{2}:\d{2})$/.test(value);
+
+const parseApiDate = (value?: Date | string | null): Date | null => {
+  if (!value) return null;
+  if (value instanceof Date) return value;
+  const normalized = hasTimeZoneInfo(value) ? value : `${value}Z`;
+  const parsed = new Date(normalized);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
 const CalendarView: React.FC<CalendarViewProps> = ({
   familyProfile,
   currentUser,
@@ -120,7 +153,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [showCreateEvent, setShowCreateEvent] = useState(false);
   const [newEventTitle, setNewEventTitle] = useState("");
   const [newEventDate, setNewEventDate] = useState(() =>
-    new Date().toISOString().slice(0, 10)
+    formatDateInputValue(new Date())
   );
   const [newEventTime, setNewEventTime] = useState('');
   const [newEventType, setNewEventType] =
@@ -134,6 +167,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
+  const [expensesByDay, setExpensesByDay] = useState<Record<string, DayExpense[]>>({});
+  const [documentsByDay, setDocumentsByDay] = useState<Record<string, DayDocument[]>>({});
   const [selectedTimeZone, setSelectedTimeZone] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('calendarTimeZone') || 'America/New_York';
@@ -185,9 +220,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   }, [selectedTimeZone]);
 
   const formatDateTime = (value?: Date | string | null): string => {
-    if (!value) return '—';
-    const dateObj = typeof value === 'string' ? new Date(value) : value;
-    if (Number.isNaN(dateObj.getTime())) return '—';
+    const dateObj = parseApiDate(value);
+    if (!dateObj) return '—';
     return new Intl.DateTimeFormat('en-US', {
       dateStyle: 'medium',
       timeStyle: 'short',
@@ -199,12 +233,23 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const selectedTimeZoneLabel =
     US_TIME_ZONES.find((tz) => tz.value === selectedTimeZone)?.label || 'Eastern (ET)';
 
+  const getDayKey = (date: Date) => formatDateInputValue(date);
+
   const formatTimeOnly = (value?: Date): string => {
     if (!value) return '';
     return new Intl.DateTimeFormat('en-US', {
       hour: 'numeric',
       minute: '2-digit',
       timeZone: selectedTimeZone,
+    }).format(value);
+  };
+
+  const formatCurrency = (value?: number) => {
+    if (typeof value !== 'number') return '';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      maximumFractionDigits: 0,
     }).format(value);
   };
 
@@ -260,7 +305,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     parent?: string,
     isoDate?: string
   ): CalendarEvent => {
-    const dateObj = isoDate ? new Date(isoDate) : new Date();
+    const dateObj = parseApiDate(isoDate) ?? new Date();
     return {
       id,
       title,
@@ -292,7 +337,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         )
       : undefined;
 
-    const newDateObj = apiRequest.newDate ? new Date(apiRequest.newDate) : undefined;
+    const newDateObj = apiRequest.newDate ? parseApiDate(apiRequest.newDate) ?? undefined : undefined;
 
     return {
       id: apiRequest.id,
@@ -305,7 +350,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       swapEventId: apiRequest.swapEventId,
       reason: apiRequest.reason || '',
       status: apiRequest.status || 'pending',
-      timestamp: apiRequest.createdAt ? new Date(apiRequest.createdAt) : new Date(),
+      timestamp: parseApiDate(apiRequest.createdAt) ?? new Date(),
       consequences: buildApiConsequences(
         (apiRequest.requestType || 'modify') as ChangeRequest['type'],
         originalEvent,
@@ -317,7 +362,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       approvedBy: apiRequest.resolvedBy_email
         ? getParentRoleForEmail(apiRequest.resolvedBy_email)
         : undefined,
-      approvedAt: apiRequest.updatedAt ? new Date(apiRequest.updatedAt) : undefined,
+      approvedAt: apiRequest.updatedAt ? parseApiDate(apiRequest.updatedAt) ?? undefined : undefined,
     };
   };
 
@@ -326,6 +371,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   // Load events when month changes
   useEffect(() => {
     loadEvents();
+    loadExpensesForMonth();
+    loadDocumentsForMonth();
   }, [currentMonth]);
 
   useEffect(() => {
@@ -340,19 +387,22 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       const response = await calendarAPI.getEvents(year, month);
       
       // Transform backend events to frontend format
-      const transformedEvents: CalendarEvent[] = response.map((event: any) => {
-        const eventDate = new Date(event.date);
-        return {
-          id: event.id,
-          date: eventDate.getDate(),
-          fullDate: eventDate,
-          type: event.type as 'custody' | 'holiday' | 'school' | 'medical' | 'activity',
-          title: event.title,
-          parent: event.parent as 'mom' | 'dad' | 'both' | undefined,
-          isSwappable: event.isSwappable ?? false,
-          hasTime: hasSpecificTime(eventDate),
-        };
-      });
+      const transformedEvents: CalendarEvent[] = response
+        .map((event: any) => {
+          const eventDate = parseApiDate(event.date);
+          if (!eventDate) return null;
+          return {
+            id: event.id,
+            date: eventDate.getDate(),
+            fullDate: eventDate,
+            type: event.type as 'custody' | 'holiday' | 'school' | 'medical' | 'activity',
+            title: event.title,
+            parent: event.parent as 'mom' | 'dad' | 'both' | undefined,
+            isSwappable: event.isSwappable ?? false,
+            hasTime: hasSpecificTime(eventDate),
+          } as CalendarEvent;
+        })
+        .filter((event): event is CalendarEvent => Boolean(event));
       
       setEvents(transformedEvents);
     } catch (error) {
@@ -365,6 +415,74 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       // Keep mock data on error
     } finally {
       setIsLoadingEvents(false);
+    }
+  };
+
+  const loadExpensesForMonth = async () => {
+    try {
+      const data = await expensesAPI.getExpenses();
+      const grouped: Record<string, DayExpense[]> = {};
+      data.forEach((expense: any) => {
+        const expenseDate =
+          parseApiDate(expense.date) ??
+          parseApiDate(expense.created_at) ??
+          parseApiDate(expense.updated_at);
+        if (!expenseDate) {
+          return;
+        }
+        if (
+          expenseDate.getFullYear() !== currentMonth.getFullYear() ||
+          expenseDate.getMonth() !== currentMonth.getMonth()
+        ) {
+          return;
+        }
+        const key = getDayKey(expenseDate);
+        const entry: DayExpense = {
+          id: expense.id ?? expense._id ?? crypto.randomUUID(),
+          description: expense.description || 'Expense',
+          amount: typeof expense.amount === 'number' ? expense.amount : undefined,
+          status: expense.status,
+          date: expenseDate,
+        };
+        grouped[key] = grouped[key] ? [...grouped[key], entry] : [entry];
+      });
+      setExpensesByDay(grouped);
+    } catch (error) {
+      console.error('Error loading expenses for calendar view:', error);
+    }
+  };
+
+  const loadDocumentsForMonth = async () => {
+    try {
+      const docs = await documentsAPI.getDocuments();
+      const grouped: Record<string, DayDocument[]> = {};
+      docs.forEach((doc: any) => {
+        const uploadDate =
+          parseApiDate(doc.uploadDate) ??
+          parseApiDate(doc.created_at) ??
+          parseApiDate(doc.updated_at);
+        if (!uploadDate) {
+          return;
+        }
+        if (
+          uploadDate.getFullYear() !== currentMonth.getFullYear() ||
+          uploadDate.getMonth() !== currentMonth.getMonth()
+        ) {
+          return;
+        }
+        const key = getDayKey(uploadDate);
+        const entry: DayDocument = {
+          id: doc.id ?? doc._id ?? crypto.randomUUID(),
+          name: doc.name || 'Document',
+          type: doc.type,
+          folder: doc.folderName,
+          uploadDate,
+        };
+        grouped[key] = grouped[key] ? [...grouped[key], entry] : [entry];
+      });
+      setDocumentsByDay(grouped);
+    } catch (error) {
+      console.error('Error loading documents for calendar view:', error);
     }
   };
 
@@ -816,24 +934,27 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     setCurrentMonth(newMonth);
   };
 
-  const openCreateEventModal = () => {
-    const nowDate = new Date();
-    const sameMonth =
-      nowDate.getFullYear() === currentMonth.getFullYear() &&
-      nowDate.getMonth() === currentMonth.getMonth();
-    const defaultDay = sameMonth ? nowDate.getDate() : 1;
-    const daysInMonth = new Date(
-      currentMonth.getFullYear(),
-      currentMonth.getMonth() + 1,
-      0
-    ).getDate();
-    const clampedDay = Math.min(defaultDay, daysInMonth);
-    const defaultDate = new Date(
-      currentMonth.getFullYear(),
-      currentMonth.getMonth(),
-      clampedDay
-    );
-    setNewEventDate(defaultDate.toISOString().slice(0, 10));
+  const openCreateEventModal = (dateOverride?: Date) => {
+    let defaultDate = dateOverride;
+    if (!defaultDate) {
+      const nowDate = new Date();
+      const sameMonth =
+        nowDate.getFullYear() === currentMonth.getFullYear() &&
+        nowDate.getMonth() === currentMonth.getMonth();
+      const defaultDay = sameMonth ? nowDate.getDate() : 1;
+      const daysInMonth = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth() + 1,
+        0
+      ).getDate();
+      const clampedDay = Math.min(defaultDay, daysInMonth);
+      defaultDate = new Date(
+        currentMonth.getFullYear(),
+        currentMonth.getMonth(),
+        clampedDay
+      );
+    }
+    setNewEventDate(formatDateInputValue(defaultDate));
     setNewEventTitle("");
     setNewEventType("custody");
     setNewEventParent("both");
@@ -1296,7 +1417,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
               >
                 <ChevronRight className="w-4 h-4" />
               </Button>
-              <Button size="sm" onClick={openCreateEventModal}>
+              <Button size="sm" onClick={() => openCreateEventModal()}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Event
               </Button>
@@ -1345,6 +1466,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             const dayEvents = getEventsForDay(day);
             const pendingRequests = getPendingRequestsForDay(day);
             const isToday = day === today && currentMonth.getMonth() === new Date().getMonth();
+            const dayDate = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
+            const dayKey = getDayKey(dayDate);
+            const dayExpensesForDate = expensesByDay[dayKey] || [];
+            const dayDocumentsForDate = documentsByDay[dayKey] || [];
 
             return (
               <div
@@ -1352,6 +1477,11 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                 className={`h-24 p-2 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer ${
                   isToday ? 'bg-blue-50 border-blue-200' : 'border-gray-200'
                 } ${pendingRequests.length > 0 ? 'ring-2 ring-orange-200' : ''}`}
+                onClick={() =>
+                  openCreateEventModal(
+                    new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day)
+                  )
+                }
               >
                 <div className={`text-sm font-medium mb-1 flex items-center justify-between ${
                   isToday ? 'text-blue-600' : 'text-gray-700'
@@ -1369,7 +1499,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   {dayEvents.slice(0, 2).map(event => (
                     <div
                       key={event.id}
-                      onClick={() => handleEventClick(event)}
+                      onClick={(eventObj) => {
+                        eventObj.stopPropagation();
+                        handleEventClick(event);
+                      }}
                       className={`text-xs px-2 py-1 rounded border ${eventColors[event.type]} truncate ${
                         event.isSwappable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
                       } ${pendingRequests.some(r => r.originalEvent.id === event.id) ? 'ring-1 ring-orange-300' : ''}`}
@@ -1388,6 +1521,40 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   {dayEvents.length > 2 && (
                     <div className="text-xs text-gray-500 px-2">
                       +{dayEvents.length - 2} more
+                    </div>
+                  )}
+                  {dayExpensesForDate.slice(0, 2).map((expense) => (
+                    <div
+                      key={`expense-${expense.id}`}
+                      className="flex items-center gap-1 rounded border border-rose-100 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-700"
+                    >
+                      <DollarSign className="w-3 h-3" />
+                      <span className="truncate">
+                        {expense.description}
+                        {expense.amount ? ` • ${formatCurrency(expense.amount)}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                  {dayExpensesForDate.length > 2 && (
+                    <div className="text-[10px] text-rose-500 px-2">
+                      +{dayExpensesForDate.length - 2} more expense{dayExpensesForDate.length - 2 === 1 ? '' : 's'}
+                    </div>
+                  )}
+                  {dayDocumentsForDate.slice(0, 2).map((doc) => (
+                    <div
+                      key={`doc-${doc.id}`}
+                      className="flex items-center gap-1 rounded border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700"
+                    >
+                      <FileText className="w-3 h-3" />
+                      <span className="truncate">
+                        {doc.name}
+                        {doc.type ? ` • ${doc.type}` : ''}
+                      </span>
+                    </div>
+                  ))}
+                  {dayDocumentsForDate.length > 2 && (
+                    <div className="text-[10px] text-indigo-500 px-2">
+                      +{dayDocumentsForDate.length - 2} more doc{dayDocumentsForDate.length - 2 === 1 ? '' : 's'}
                     </div>
                   )}
                 </div>
