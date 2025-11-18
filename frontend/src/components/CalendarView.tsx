@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import BridgetteAvatar from './BridgetteAvatar';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -169,6 +170,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [expensesByDay, setExpensesByDay] = useState<Record<string, DayExpense[]>>({});
   const [documentsByDay, setDocumentsByDay] = useState<Record<string, DayDocument[]>>({});
+  const [showExpenses, setShowExpenses] = useState<boolean>(true);
+  const [showDocuments, setShowDocuments] = useState<boolean>(true);
   const [selectedTimeZone, setSelectedTimeZone] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('calendarTimeZone') || 'America/New_York';
@@ -368,12 +371,22 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   const [emailHistory, setEmailHistory] = useState<EmailNotification[]>([]);
 
-  // Load events when month changes
+  // Load events immediately, then expenses and documents for better UX
   useEffect(() => {
-    loadEvents();
-    loadExpensesForMonth();
-    loadDocumentsForMonth();
-  }, [currentMonth]);
+    const loadAllData = async () => {
+      // Load events first so calendar appears immediately
+      await loadEvents();
+      // Then load expenses and documents in parallel (non-blocking)
+      Promise.all([
+        loadExpensesForMonth(),
+        loadDocumentsForMonth(),
+      ]).catch((error) => {
+        console.error('Error loading expenses/documents:', error);
+      });
+    };
+    loadAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentMonth]); // Functions depend on currentMonth which is in the dependency array
 
   useEffect(() => {
     loadChangeRequests();
@@ -422,20 +435,23 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     try {
       const data = await expensesAPI.getExpenses();
       const grouped: Record<string, DayExpense[]> = {};
-      data.forEach((expense: any) => {
+      const targetYear = currentMonth.getFullYear();
+      const targetMonth = currentMonth.getMonth();
+      
+      // Pre-filter and process in a single pass for better performance
+      for (const expense of data) {
         const expenseDate =
           parseApiDate(expense.date) ??
           parseApiDate(expense.created_at) ??
           parseApiDate(expense.updated_at);
-        if (!expenseDate) {
-          return;
+        
+        if (!expenseDate) continue;
+        
+        // Early exit if date doesn't match target month
+        if (expenseDate.getFullYear() !== targetYear || expenseDate.getMonth() !== targetMonth) {
+          continue;
         }
-        if (
-          expenseDate.getFullYear() !== currentMonth.getFullYear() ||
-          expenseDate.getMonth() !== currentMonth.getMonth()
-        ) {
-          return;
-        }
+        
         const key = getDayKey(expenseDate);
         const entry: DayExpense = {
           id: expense.id ?? expense._id ?? crypto.randomUUID(),
@@ -444,11 +460,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           status: expense.status,
           date: expenseDate,
         };
-        grouped[key] = grouped[key] ? [...grouped[key], entry] : [entry];
-      });
+        
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+        grouped[key].push(entry);
+      }
       setExpensesByDay(grouped);
     } catch (error) {
       console.error('Error loading expenses for calendar view:', error);
+      setExpensesByDay({}); // Reset on error
     }
   };
 
@@ -456,20 +477,23 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     try {
       const docs = await documentsAPI.getDocuments();
       const grouped: Record<string, DayDocument[]> = {};
-      docs.forEach((doc: any) => {
+      const targetYear = currentMonth.getFullYear();
+      const targetMonth = currentMonth.getMonth();
+      
+      // Pre-filter and process in a single pass for better performance
+      for (const doc of docs) {
         const uploadDate =
           parseApiDate(doc.uploadDate) ??
           parseApiDate(doc.created_at) ??
           parseApiDate(doc.updated_at);
-        if (!uploadDate) {
-          return;
+        
+        if (!uploadDate) continue;
+        
+        // Early exit if date doesn't match target month
+        if (uploadDate.getFullYear() !== targetYear || uploadDate.getMonth() !== targetMonth) {
+          continue;
         }
-        if (
-          uploadDate.getFullYear() !== currentMonth.getFullYear() ||
-          uploadDate.getMonth() !== currentMonth.getMonth()
-        ) {
-          return;
-        }
+        
         const key = getDayKey(uploadDate);
         const entry: DayDocument = {
           id: doc.id ?? doc._id ?? crypto.randomUUID(),
@@ -478,11 +502,16 @@ const CalendarView: React.FC<CalendarViewProps> = ({
           folder: doc.folderName,
           uploadDate,
         };
-        grouped[key] = grouped[key] ? [...grouped[key], entry] : [entry];
-      });
+        
+        if (!grouped[key]) {
+          grouped[key] = [];
+        }
+        grouped[key].push(entry);
+      }
       setDocumentsByDay(grouped);
     } catch (error) {
       console.error('Error loading documents for calendar view:', error);
+      setDocumentsByDay({}); // Reset on error
     }
   };
 
@@ -1307,35 +1336,6 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Enhanced Bridgette Helper with Alert System */}
-      <Card className={`border-2 ${bridgetteInfo.isAlert ? 'border-red-200 bg-red-50' : 'border-blue-200 bg-blue-50'}`}>
-        <CardContent className="p-4">
-          <div className="flex items-center space-x-4">
-            <BridgetteAvatar size="md" expression={bridgetteInfo.expression} />
-            <div className="flex-1">
-              <p className="text-sm font-medium text-gray-800">
-                Hey {greetingName}, I'm here to help. Ask anything!
-              </p>
-              <p className={`text-xs mt-1 font-medium ${bridgetteInfo.isAlert ? 'text-red-700' : 'text-gray-600'}`}>
-                {bridgetteInfo.message}
-              </p>
-              {bridgetteInfo.isAlert && pendingRequestsCount > 0 && (
-                <div className="mt-2">
-                  <Button 
-                    size="sm" 
-                    className="bg-red-600 hover:bg-red-700 text-white"
-                    onClick={() => setShowPendingRequests(true)}
-                  >
-                    <AlertTriangle className="w-4 h-4 mr-1" />
-                    Review {pendingRequestsCount} Request{pendingRequestsCount > 1 ? 's' : ''} Now
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       {/* Email History Alert */}
       {emailHistory.length > 0 && (
         <Alert className="border-green-200 bg-green-50">
@@ -1398,6 +1398,38 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Filter Checkboxes */}
+            <div className="flex flex-wrap items-center justify-end gap-4 px-2 py-2 bg-gray-50 rounded-lg">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-expenses"
+                  checked={showExpenses}
+                  onCheckedChange={(checked) => setShowExpenses(checked === true)}
+                />
+                <Label
+                  htmlFor="show-expenses"
+                  className="text-sm font-normal cursor-pointer flex items-center gap-1"
+                >
+                  <DollarSign className="w-4 h-4 text-rose-600" />
+                  Expenses
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="show-documents"
+                  checked={showDocuments}
+                  onCheckedChange={(checked) => setShowDocuments(checked === true)}
+                />
+                <Label
+                  htmlFor="show-documents"
+                  className="text-sm font-normal cursor-pointer flex items-center gap-1"
+                >
+                  <FileText className="w-4 h-4 text-indigo-600" />
+                  Documents
+                </Label>
+              </div>
             </div>
 
             <div className="flex flex-wrap items-center justify-end gap-2">
@@ -1523,7 +1555,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       +{dayEvents.length - 2} more
                     </div>
                   )}
-                  {dayExpensesForDate.slice(0, 2).map((expense) => (
+                  {showExpenses && dayExpensesForDate.slice(0, 2).map((expense) => (
                     <div
                       key={`expense-${expense.id}`}
                       className="flex items-center gap-1 rounded border border-rose-100 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-700"
@@ -1535,12 +1567,12 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       </span>
                     </div>
                   ))}
-                  {dayExpensesForDate.length > 2 && (
+                  {showExpenses && dayExpensesForDate.length > 2 && (
                     <div className="text-[10px] text-rose-500 px-2">
                       +{dayExpensesForDate.length - 2} more expense{dayExpensesForDate.length - 2 === 1 ? '' : 's'}
                     </div>
                   )}
-                  {dayDocumentsForDate.slice(0, 2).map((doc) => (
+                  {showDocuments && dayDocumentsForDate.slice(0, 2).map((doc) => (
                     <div
                       key={`doc-${doc.id}`}
                       className="flex items-center gap-1 rounded border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700"
@@ -1552,7 +1584,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                       </span>
                     </div>
                   ))}
-                  {dayDocumentsForDate.length > 2 && (
+                  {showDocuments && dayDocumentsForDate.length > 2 && (
                     <div className="text-[10px] text-indigo-500 px-2">
                       +{dayDocumentsForDate.length - 2} more doc{dayDocumentsForDate.length - 2 === 1 ? '' : 's'}
                     </div>

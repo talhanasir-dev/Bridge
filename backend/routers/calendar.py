@@ -56,10 +56,6 @@ def _serialize_change_request_document(change_doc: dict) -> ChangeRequest:
         status=change_doc.get("status", "pending"),
         reason=change_doc.get("reason"),
         createdAt=_ensure_datetime(change_doc.get("createdAt")),
-        updatedAt=_ensure_datetime(change_doc.get("updatedAt"))
-        if change_doc.get("updatedAt")
-        else None,
-        resolvedBy_email=change_doc.get("resolvedBy_email"),
         requestType=change_doc.get("requestType", "modify"),
         eventTitle=change_doc.get("eventTitle"),
         eventType=change_doc.get("eventType"),
@@ -288,13 +284,7 @@ async def update_change_request(
 
     db.change_requests.update_one(
         {"_id": change_request_doc.get("_id")},
-        {
-            "$set": {
-                "status": update_data.status,
-                "resolvedBy_email": current_user.email,
-                "updatedAt": change_request_doc["updatedAt"],
-            }
-        },
+        {"$set": {"status": update_data.status, "resolvedBy_email": current_user.email}},
     )
 
     # If approved, apply the requested date change
