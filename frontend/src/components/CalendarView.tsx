@@ -141,6 +141,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [showPendingRequests, setShowPendingRequests] = useState(false);
   const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [showBridgetteAlternatives, setShowBridgetteAlternatives] = useState(false);
+  const [showEventDetails, setShowEventDetails] = useState(false);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
   const [changeType, setChangeType] = useState<'swap' | 'modify' | 'cancel'>('swap');
   const [swapDate, setSwapDate] = useState<number | null>(null);
@@ -170,8 +171,8 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
   const [expensesByDay, setExpensesByDay] = useState<Record<string, DayExpense[]>>({});
   const [documentsByDay, setDocumentsByDay] = useState<Record<string, DayDocument[]>>({});
-  const [showExpenses, setShowExpenses] = useState<boolean>(true);
-  const [showDocuments, setShowDocuments] = useState<boolean>(true);
+  const [showExpenses, setShowExpenses] = useState<boolean>(false);
+  const [showDocuments, setShowDocuments] = useState<boolean>(false);
   const [selectedTimeZone, setSelectedTimeZone] = useState<string>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('calendarTimeZone') || 'America/New_York';
@@ -535,19 +536,21 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     }
   };
 
+  // Event colors using new theme (#084dbd blue, #FFBF00 yellow, light parrot)
   const eventColors = {
-    custody: 'bg-blue-100 text-blue-800 border-blue-200',
-    holiday: 'bg-red-100 text-red-800 border-red-200',
-    school: 'bg-green-100 text-green-800 border-green-200',
-    medical: 'bg-purple-100 text-purple-800 border-purple-200',
-    activity: 'bg-orange-100 text-orange-800 border-orange-200'
+    custody: 'bg-[hsl(217,92%,95%)] text-[hsl(217,92%,25%)] border-[hsl(217,92%,80%)]', // Primary Blue (#084dbd)
+    holiday: 'bg-[hsl(45,100%,95%)] text-[hsl(45,100%,30%)] border-[hsl(45,100%,80%)]', // Secondary Yellow/Gold (#FFBF00)
+    school: 'bg-[hsl(160,80%,95%)] text-[hsl(160,80%,30%)] border-[hsl(160,80%,80%)]', // Light Parrot/Teal
+    medical: 'bg-[hsl(340,100%,95%)] text-[hsl(340,100%,30%)] border-[hsl(340,100%,80%)]', // Pink/Rose
+    activity: 'bg-[hsl(30,100%,95%)] text-[hsl(30,100%,30%)] border-[hsl(30,100%,80%)]' // Orange
   };
 
+  // Status colors using new theme
   const statusColors = {
-    pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
-    approved: 'bg-green-100 text-green-800 border-green-200',
+    pending: 'bg-[hsl(45,100%,95%)] text-[hsl(45,100%,30%)] border-[hsl(45,100%,80%)]', // Secondary Yellow/Gold (#FFBF00)
+    approved: 'bg-[hsl(160,80%,95%)] text-[hsl(160,80%,30%)] border-[hsl(160,80%,80%)]', // Light Parrot/Teal
     disputed: 'bg-bridge-red text-white border-bridge-red',
-    paid: 'bg-blue-100 text-blue-800 border-blue-200'
+    paid: 'bg-[hsl(217,92%,95%)] text-[hsl(217,92%,25%)] border-[hsl(217,92%,80%)]' // Primary Blue (#084dbd)
   };
 
   const statusIcons = {
@@ -1067,10 +1070,15 @@ const CalendarView: React.FC<CalendarViewProps> = ({
   };
 
   const handleEventClick = (event: CalendarEvent) => {
-    if (!event.isSwappable) {
-      return; // Can't modify non-swappable events
-    }
     setSelectedEvent(event);
+    setShowEventDetails(true);
+  };
+
+  const handleRequestChangeFromDetails = () => {
+    if (!selectedEvent || !selectedEvent.isSwappable) {
+      return;
+    }
+    setShowEventDetails(false);
     setShowChangeRequest(true);
   };
 
@@ -1338,13 +1346,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({
     <div className="space-y-6">
       {/* Email History Alert */}
       {emailHistory.length > 0 && (
-        <Alert className="border-green-200 bg-green-50">
-          <Mail className="h-4 w-4 text-green-600" />
+        <Alert className="border-[hsl(160,80%,80%)] bg-[hsl(160,80%,95%)]">
+          <Mail className="h-4 w-4 text-[hsl(160,80%,50%)]" />
           <AlertDescription className="text-green-800">
             {emailHistory.length} automated documentation email{emailHistory.length > 1 ? 's' : ''} sent to both parents.
             <Button 
               variant="link" 
-              className="p-0 ml-2 text-green-600 underline"
+              className="p-0 ml-2 text-[hsl(160,80%,50%)] underline"
               onClick={() => setShowEmailPreview(true)}
             >
               View latest email
@@ -1355,13 +1363,13 @@ const CalendarView: React.FC<CalendarViewProps> = ({
 
       {/* Pending Requests Alert */}
       {pendingRequestsCount > 0 && (
-        <Alert className="border-orange-200 bg-orange-50">
-          <AlertTriangle className="h-4 w-4 text-orange-600" />
+        <Alert className="border-[hsl(45,100%,80%)] bg-[hsl(45,100%,95%)]">
+          <AlertTriangle className="h-4 w-4 text-[hsl(45,100%,50%)]" />
           <AlertDescription className="text-orange-800">
             You have {pendingRequestsCount} pending schedule change request{pendingRequestsCount > 1 ? 's' : ''} that need{pendingRequestsCount === 1 ? 's' : ''} your response.
             <Button 
               variant="link" 
-              className="p-0 ml-2 text-orange-600 underline"
+              className="p-0 ml-2 text-[hsl(45,100%,50%)] underline"
               onClick={() => setShowPendingRequests(true)}
             >
               Review now
@@ -1457,7 +1465,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                 <Button 
                   size="sm" 
                   variant="outline"
-                  className="border-orange-300 text-orange-600 hover:bg-orange-50"
+                  className="border-[hsl(45,100%,70%)] text-[hsl(45,100%,50%)] hover:bg-[hsl(45,100%,95%)]"
                   onClick={() => setShowPendingRequests(true)}
                 >
                   <Clock className="w-4 h-4 mr-2" />
@@ -1468,7 +1476,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                 <Button 
                   size="sm" 
                   variant="outline"
-                  className="border-green-300 text-green-600 hover:bg-green-50"
+                  className="border-[hsl(160,80%,70%)] text-[hsl(160,80%,50%)] hover:bg-[hsl(160,80%,95%)]"
                   onClick={() => setShowEmailPreview(true)}
                 >
                   <Mail className="w-4 h-4 mr-2" />
@@ -1489,10 +1497,10 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         </div>
 
         {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-2 auto-rows-fr">
           {getDaysInMonth().map((day, index) => {
             if (day === null) {
-              return <div key={index} className="h-24"></div>;
+              return <div key={index} className="min-h-[120px]"></div>;
             }
 
             const dayEvents = getEventsForDay(day);
@@ -1503,90 +1511,133 @@ const CalendarView: React.FC<CalendarViewProps> = ({
             const dayExpensesForDate = expensesByDay[dayKey] || [];
             const dayDocumentsForDate = documentsByDay[dayKey] || [];
 
+            // Calculate total items to show (max 3 items per day)
+            const maxItemsToShow = 3;
+            const allItems: Array<{ type: 'event' | 'expense' | 'document'; data: CalendarEvent | DayExpense | DayDocument; id: string }> = [];
+            
+            // Add events first (priority)
+            const eventsToShow = Math.min(dayEvents.length, maxItemsToShow);
+            dayEvents.slice(0, eventsToShow).forEach(event => {
+              allItems.push({ type: 'event', data: event, id: event.id });
+            });
+            
+            // Add expenses if enabled and we have space
+            if (showExpenses && allItems.length < maxItemsToShow) {
+              const expensesToShow = Math.min(dayExpensesForDate.length, maxItemsToShow - allItems.length);
+              dayExpensesForDate.slice(0, expensesToShow).forEach(expense => {
+                allItems.push({ type: 'expense', data: expense, id: `expense-${expense.id}` });
+              });
+            }
+            
+            // Add documents if enabled and we have space
+            if (showDocuments && allItems.length < maxItemsToShow) {
+              const docsToShow = Math.min(dayDocumentsForDate.length, maxItemsToShow - allItems.length);
+              dayDocumentsForDate.slice(0, docsToShow).forEach(doc => {
+                allItems.push({ type: 'document', data: doc, id: `doc-${doc.id}` });
+              });
+            }
+            
+            // Calculate remaining items
+            const shownEvents = Math.min(dayEvents.length, maxItemsToShow);
+            const shownExpenses = showExpenses ? Math.min(dayExpensesForDate.length, Math.max(0, maxItemsToShow - shownEvents)) : 0;
+            const shownDocuments = showDocuments ? Math.min(dayDocumentsForDate.length, Math.max(0, maxItemsToShow - shownEvents - shownExpenses)) : 0;
+            
+            const remainingEvents = Math.max(0, dayEvents.length - shownEvents);
+            const remainingExpenses = showExpenses ? Math.max(0, dayExpensesForDate.length - shownExpenses) : 0;
+            const remainingDocuments = showDocuments ? Math.max(0, dayDocumentsForDate.length - shownDocuments) : 0;
+            const totalRemaining = remainingEvents + remainingExpenses + remainingDocuments;
+
             return (
               <div
                 key={day}
-                className={`h-24 p-2 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer ${
-                  isToday ? 'bg-blue-50 border-blue-200' : 'border-gray-200'
-                } ${pendingRequests.length > 0 ? 'ring-2 ring-orange-200' : ''}`}
+                className={`min-h-[120px] p-1.5 border rounded-lg hover:bg-gray-50 transition-colors cursor-pointer flex flex-col ${
+                  isToday ? 'bg-[hsl(217,92%,95%)] border-[hsl(217,92%,80%)]' : 'border-gray-200'
+                } ${pendingRequests.length > 0 ? 'ring-2 ring-[hsl(45,100%,80%)]' : ''}`}
                 onClick={() =>
                   openCreateEventModal(
                     new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day)
                   )
                 }
               >
-                <div className={`text-sm font-medium mb-1 flex items-center justify-between ${
-                  isToday ? 'text-blue-600' : 'text-gray-700'
+                <div className={`text-xs font-semibold mb-1 flex items-center justify-between flex-shrink-0 ${
+                  isToday ? 'text-[hsl(217,92%,39%)]' : 'text-gray-700'
                 }`}>
-                  <span>
+                  <span className="flex items-center gap-1">
                     {day}
-                    {isToday && <span className="ml-1 text-xs">Today</span>}
+                    {isToday && <span className="text-[10px] font-normal">Today</span>}
                   </span>
                   {pendingRequests.length > 0 && (
-                    <Clock className="w-3 h-3 text-orange-500" />
+                    <Clock className="w-3 h-3 text-orange-500 flex-shrink-0" />
                   )}
                 </div>
                 
-                <div className="space-y-1">
-                  {dayEvents.slice(0, 2).map(event => (
-                    <div
-                      key={event.id}
-                      onClick={(eventObj) => {
-                        eventObj.stopPropagation();
-                        handleEventClick(event);
-                      }}
-                      className={`text-xs px-2 py-1 rounded border ${eventColors[event.type]} truncate ${
-                        event.isSwappable ? 'cursor-pointer hover:opacity-80' : 'cursor-default'
-                      } ${pendingRequests.some(r => r.originalEvent.id === event.id) ? 'ring-1 ring-orange-300' : ''}`}
+                <div className="flex-1 overflow-hidden space-y-0.5">
+                  {allItems.map((item) => {
+                    if (item.type === 'event') {
+                      const event = item.data as CalendarEvent;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={(eventObj) => {
+                            eventObj.stopPropagation();
+                            handleEventClick(event);
+                          }}
+                          className={`text-[10px] px-1.5 py-0.5 rounded border ${eventColors[event.type]} truncate cursor-pointer hover:opacity-80 ${
+                            pendingRequests.some(r => r.originalEvent.id === event.id) ? 'ring-1 ring-orange-300' : ''
+                          }`}
+                          title={event.title}
+                        >
+                          <span className="truncate block">{event.title}</span>
+                          {event.hasTime && (
+                            <span className="text-[9px] opacity-75 block truncate">
+                              {formatTimeOnly(event.fullDate)}
+                            </span>
+                          )}
+                        </div>
+                      );
+                    } else if (item.type === 'expense') {
+                      const expense = item.data as DayExpense;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 rounded border border-rose-100 bg-rose-50 px-1.5 py-0.5 text-[9px] text-rose-700"
+                          title={expense.description}
+                        >
+                          <DollarSign className="w-2.5 h-2.5 flex-shrink-0" />
+                          <span className="truncate">
+                            {expense.description}
+                            {expense.amount ? ` • ${formatCurrency(expense.amount)}` : ''}
+                          </span>
+                        </div>
+                      );
+                    } else if (item.type === 'document') {
+                      const doc = item.data as DayDocument;
+                      return (
+                        <div
+                          key={item.id}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-1 rounded border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 text-[9px] text-indigo-700"
+                          title={doc.name}
+                        >
+                          <FileText className="w-2.5 h-2.5 flex-shrink-0" />
+                          <span className="truncate">
+                            {doc.name}
+                            {doc.type ? ` • ${doc.type}` : ''}
+                          </span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })}
+                  
+                  {totalRemaining > 0 && (
+                    <div 
+                      onClick={(e) => e.stopPropagation()}
+                      className="text-[9px] text-gray-500 px-1.5 py-0.5 font-medium"
+                      title={`${remainingEvents} events, ${remainingExpenses} expenses, ${remainingDocuments} documents`}
                     >
-                      {event.title}
-                      {event.hasTime && (
-                        <span className="block text-[10px] text-blue-900 mt-0.5">
-                          {formatTimeOnly(event.fullDate)}
-                        </span>
-                      )}
-                      {event.isSwappable && (
-                        <ArrowRightLeft className="w-2 h-2 inline ml-1" />
-                      )}
-                    </div>
-                  ))}
-                  {dayEvents.length > 2 && (
-                    <div className="text-xs text-gray-500 px-2">
-                      +{dayEvents.length - 2} more
-                    </div>
-                  )}
-                  {showExpenses && dayExpensesForDate.slice(0, 2).map((expense) => (
-                    <div
-                      key={`expense-${expense.id}`}
-                      className="flex items-center gap-1 rounded border border-rose-100 bg-rose-50 px-2 py-0.5 text-[10px] text-rose-700"
-                    >
-                      <DollarSign className="w-3 h-3" />
-                      <span className="truncate">
-                        {expense.description}
-                        {expense.amount ? ` • ${formatCurrency(expense.amount)}` : ''}
-                      </span>
-                    </div>
-                  ))}
-                  {showExpenses && dayExpensesForDate.length > 2 && (
-                    <div className="text-[10px] text-rose-500 px-2">
-                      +{dayExpensesForDate.length - 2} more expense{dayExpensesForDate.length - 2 === 1 ? '' : 's'}
-                    </div>
-                  )}
-                  {showDocuments && dayDocumentsForDate.slice(0, 2).map((doc) => (
-                    <div
-                      key={`doc-${doc.id}`}
-                      className="flex items-center gap-1 rounded border border-indigo-100 bg-indigo-50 px-2 py-0.5 text-[10px] text-indigo-700"
-                    >
-                      <FileText className="w-3 h-3" />
-                      <span className="truncate">
-                        {doc.name}
-                        {doc.type ? ` • ${doc.type}` : ''}
-                      </span>
-                    </div>
-                  ))}
-                  {showDocuments && dayDocumentsForDate.length > 2 && (
-                    <div className="text-[10px] text-indigo-500 px-2">
-                      +{dayDocumentsForDate.length - 2} more doc{dayDocumentsForDate.length - 2 === 1 ? '' : 's'}
+                      +{totalRemaining} more
                     </div>
                   )}
                 </div>
@@ -1598,23 +1649,23 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       {/* Legend */}
         <div className="mt-6 flex flex-wrap gap-4 text-sm">
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-blue-200 rounded mr-2"></div>
+            <div className="w-3 h-3 bg-[hsl(217,92%,80%)] rounded mr-2"></div>
             <span>Custody Days</span>
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-green-200 rounded mr-2"></div>
+            <div className="w-3 h-3 bg-[hsl(160,80%,80%)] rounded mr-2"></div>
             <span>School Events</span>
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-purple-200 rounded mr-2"></div>
+            <div className="w-3 h-3 bg-[hsl(340,100%,80%)] rounded mr-2"></div>
             <span>Medical</span>
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-red-200 rounded mr-2"></div>
+            <div className="w-3 h-3 bg-[hsl(45,100%,80%)] rounded mr-2"></div>
             <span>Holidays</span>
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 bg-orange-200 rounded mr-2"></div>
+            <div className="w-3 h-3 bg-[hsl(30,100%,80%)] rounded mr-2"></div>
             <span>Activities</span>
           </div>
           <div className="flex items-center">
@@ -1739,6 +1790,123 @@ const CalendarView: React.FC<CalendarViewProps> = ({
         </DialogContent>
       </Dialog>
 
+      {/* Event Details Dialog */}
+      <Dialog open={showEventDetails} onOpenChange={setShowEventDetails}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Event Details</DialogTitle>
+          </DialogHeader>
+          
+          {selectedEvent && (
+            <div className="space-y-4">
+              {/* Event Title and Type */}
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-800 mb-2">
+                    {selectedEvent.title}
+                  </h3>
+                  <Badge className={eventColors[selectedEvent.type]}>
+                    {selectedEvent.type.charAt(0).toUpperCase() + selectedEvent.type.slice(1)}
+                  </Badge>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Date and Time */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 text-sm">
+                  <CalendarIcon className="w-4 h-4 text-gray-500" />
+                  <span className="text-gray-600">
+                    <strong>Date:</strong> {monthNames[currentMonth.getMonth()]} {selectedEvent.date}, {currentMonth.getFullYear()}
+                  </span>
+                </div>
+                {selectedEvent.hasTime && (
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-600">
+                      <strong>Time:</strong> {formatTimeOnly(selectedEvent.fullDate)}
+                    </span>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 text-sm">
+                  <Clock className="w-4 h-4 text-gray-500" />
+                  <span className="text-gray-600">
+                    <strong>Timezone:</strong> {selectedTimeZoneLabel}
+                  </span>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Parent Information */}
+              {selectedEvent.parent && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <User className="w-4 h-4 text-gray-500" />
+                    <span className="text-gray-600">
+                      <strong>Responsible Parent:</strong>{' '}
+                      {selectedEvent.parent === 'both'
+                        ? 'Both parents'
+                        : getParentDisplayName(selectedEvent.parent)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Swappable Status */}
+              <div className="flex items-center gap-2 text-sm">
+                {selectedEvent.isSwappable ? (
+                  <>
+                    <ArrowRightLeft className="w-4 h-4 text-green-500" />
+                    <span className="text-gray-600">
+                      This event can be swapped or modified
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-4 h-4 text-gray-400" />
+                    <span className="text-gray-500">
+                      This event cannot be modified
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Pending Requests for this event */}
+              {changeRequests.filter(r => r.originalEvent.id === selectedEvent.id && r.status === 'pending').length > 0 && (
+                <Alert className="border-[hsl(45,100%,80%)] bg-[hsl(45,100%,95%)]">
+                  <AlertTriangle className="h-4 w-4 text-[hsl(45,100%,50%)]" />
+                  <AlertDescription className="text-orange-800">
+                    This event has pending change requests. Check the "Requests" button to review them.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-2 pt-2">
+                {selectedEvent.isSwappable && (
+                  <Button
+                    onClick={handleRequestChangeFromDetails}
+                    className="flex-1"
+                  >
+                    <Edit3 className="w-4 h-4 mr-2" />
+                    Request Change
+                  </Button>
+                )}
+                <Button
+                  variant="outline"
+                  onClick={() => setShowEventDetails(false)}
+                  className={selectedEvent.isSwappable ? '' : 'flex-1'}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Change Request Dialog */}
       <Dialog open={showChangeRequest} onOpenChange={setShowChangeRequest}>
         <DialogContent className="max-w-2xl">
@@ -1815,7 +1983,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                           onClick={() => canSwap && setSwapDate(day)}
                           disabled={!canSwap}
                           className={`h-8 text-xs rounded ${
-                            swapDate === day ? 'bg-blue-500 text-white' : 
+                            swapDate === day ? 'bg-[hsl(217,92%,39%)] text-white' : 
                             canSwap ? 'bg-green-100 hover:bg-green-200 text-green-800' : 
                             'bg-gray-100 text-gray-400 cursor-not-allowed'
                           }`}
@@ -1848,7 +2016,7 @@ const CalendarView: React.FC<CalendarViewProps> = ({
                           onClick={() => canMove && setNewDate(day)}
                           disabled={!canMove}
                           className={`h-8 text-xs rounded ${
-                            newDate === day ? 'bg-blue-500 text-white' : 
+                            newDate === day ? 'bg-[hsl(217,92%,39%)] text-white' : 
                             hasConflict ? 'bg-red-100 hover:bg-red-200 text-red-800' :
                             canMove ? 'bg-gray-100 hover:bg-gray-200' : 
                             'bg-gray-100 text-gray-400 cursor-not-allowed'

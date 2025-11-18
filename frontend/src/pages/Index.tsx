@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, BookOpen, Scale, AlertTriangle, HelpCircle, Baby, LogOut, UserCheck, UserX, BarChart3 } from 'lucide-react';
+import { Calendar, MessageSquare, DollarSign, FileText, Settings, Home, Heart, Users, Trophy, BookOpen, Scale, AlertTriangle, HelpCircle, Baby, LogOut, UserCheck, UserX, BarChart3, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -1223,15 +1223,6 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
                       Review Now
                     </Button>
                   </div>
-                  <div className="flex-shrink-0 bridgette-container">
-                    <img 
-                      src="/bridgette-avatar.png" 
-                      alt="Bridgette" 
-                      className="w-32 h-32 bridgette-animated cursor-pointer"
-                      style={{ mixBlendMode: 'multiply' }}
-                      title="Hi! I'm Bridgette, your friendly co-parenting assistant! 👋"
-                    />
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -1362,13 +1353,17 @@ const Index: React.FC<IndexProps> = ({ onLogout, startOnboarding = false, startI
           </TabsContent>
         </Tabs>
         <div className="fixed bottom-6 right-6 hidden md:block">
-          <Button 
-            className="rounded-full w-16 h-16 bg-bridge-blue hover:bg-blue-600 shadow-lg border-2 border-gray-300"
+          <button
+            className="rounded-full w-16 h-16 bg-white hover:bg-gray-50 shadow-lg border-2 border-[hsl(217,92%,39%)] overflow-hidden cursor-pointer transition-transform hover:scale-110"
             onClick={() => setShowSupportChatbot(true)}
-            title="Talk to the Bridge Support Coach"
+            title="Talk to Bridgette, your friendly co-parenting assistant! 👋"
           >
-            <HelpCircle className="w-6 h-6 text-white" />
-          </Button>
+            <img 
+              src="/bridgette-avatar.png" 
+              alt="Bridgette" 
+              className="w-full h-full object-cover"
+            />
+          </button>
         </div>
       </div>
       <SupportChatbot

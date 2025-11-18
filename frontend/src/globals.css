@@ -4,6 +4,16 @@
 
 @layer base {
   :root {
+    /* 
+     * THEME CONFIGURATION
+     * 
+     * ⚠️ IMPORTANT: To update colors, edit `src/config/theme.ts` first,
+     * then update the corresponding CSS variables below to match.
+     * 
+     * See `src/config/THEME_GUIDE.md` for detailed instructions.
+     */
+
+    /* Base Colors - Maps to theme.neutral */
     --background: 0 0% 100%;
     --foreground: 0 0% 0%;
 
@@ -13,42 +23,49 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 0%;
 
-    --primary: 0 84% 50%;
-    --primary-foreground: 0 0% 100%;
+    /* Primary Colors - Maps to theme.primary (#084dbd) */
+    --primary: 217 92% 39%;            /* Update: theme.primary.DEFAULT */
+    --primary-foreground: 0 0% 100%;  /* Update: theme.primary.foreground */
 
-    --secondary: 60 100% 50%;
-    --secondary-foreground: 0 0% 0%;
+    /* Secondary Colors - Maps to theme.secondary (#FFBF00) */
+    --secondary: 45 100% 50%;         /* Update: theme.secondary.DEFAULT */
+    --secondary-foreground: 0 0% 0%;  /* Update: theme.secondary.foreground */
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 45%;
+    /* Muted Colors - Maps to theme.neutral.muted */
+    --muted: 0 0% 96%;                /* Update: theme.neutral.muted */
+    --muted-foreground: 0 0% 45%;     /* Update: theme.neutral.muted-foreground */
 
-    --accent: 240 100% 50%;
-    --accent-foreground: 0 0% 100%;
+    /* Accent Colors - Maps to theme.accent (Light Parrot) */
+    --accent: 160 80% 50%;            /* Update: theme.accent.DEFAULT */
+    --accent-foreground: 0 0% 100%;    /* Update: theme.accent.foreground */
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    /* Destructive/Error Colors - Maps to theme.error */
+    --destructive: 0 84% 60%;         /* Update: theme.error.DEFAULT */
+    --destructive-foreground: 0 0% 100%; /* Update: theme.error.foreground */
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 0 84% 50%;
+    /* Border & Input - Maps to theme.neutral */
+    --border: 0 0% 90%;               /* Update: theme.neutral.border */
+    --input: 0 0% 90%;                 /* Update: theme.neutral.input */
+    --ring: 217 92% 39%;               /* Update: theme.primary.DEFAULT */
 
     --radius: 0.5rem;
 
+    /* Sidebar Colors */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 0 0% 20%;
-    --sidebar-primary: 0 84% 50%;
+    --sidebar-primary: 217 92% 39%;    /* Update: theme.primary.DEFAULT */
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 95%;
     --sidebar-accent-foreground: 0 0% 20%;
     --sidebar-border: 0 0% 90%;
-    --sidebar-ring: 0 84% 50%;
+    --sidebar-ring: 217 92% 39%;       /* Update: theme.primary.DEFAULT */
 
-    /* Bridge Custom Colors */
-    --bridge-red: 0 84% 50%;
-    --bridge-yellow: 60 100% 50%;
-    --bridge-blue: 240 100% 50%;
-    --bridge-green: 120 100% 35%;
-    --bridge-black: 0 0% 0%;
+    /* Bridge Brand Colors - Maps to theme.bridge */
+    --bridge-red: 0 84% 60%;           /* Update: theme.bridge.red */
+    --bridge-yellow: 45 100% 50%;      /* Update: theme.bridge.yellow (#FFBF00) */
+    --bridge-blue: 217 92% 39%;        /* Update: theme.bridge.blue (#084dbd) */
+    --bridge-green: 160 80% 50%;      /* Update: theme.bridge.green (Light Parrot) */
+    --bridge-black: 0 0% 0%;           /* Update: theme.bridge.black */
   }
 
   .dark {
@@ -61,16 +78,16 @@
     --popover: 0 0% 8%;
     --popover-foreground: 0 0% 100%;
 
-    --primary: 0 84% 55%;
+    --primary: 217 92% 45%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 60 100% 45%;
+    --secondary: 45 100% 45%;
     --secondary-foreground: 0 0% 0%;
 
     --muted: 0 0% 15%;
     --muted-foreground: 0 0% 65%;
 
-    --accent: 240 100% 55%;
+    --accent: 160 80% 55%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 84% 55%;
@@ -78,16 +95,16 @@
 
     --border: 0 0% 20%;
     --input: 0 0% 20%;
-    --ring: 0 84% 55%;
+    --ring: 217 92% 45%;
 
     --sidebar-background: 0 0% 8%;
     --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 0 84% 55%;
+    --sidebar-primary: 217 92% 45%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 0 0% 15%;
     --sidebar-accent-foreground: 0 0% 95%;
     --sidebar-border: 0 0% 20%;
-    --sidebar-ring: 0 84% 55%;
+    --sidebar-ring: 217 92% 45%;
   }
 }
 
