@@ -271,10 +271,12 @@ Document text:
             })
         
         # Check for custody schedule patterns
-        if re.search(r'week.*on.*week.*off|alternat.*week', text_lower):
-            parsed_data["custodySchedule"] = "Week-on/week-off"
-        elif re.search(r'2\s*-\s*2\s*-\s*3|two.*two.*three', text_lower):
+        # IMPORTANT: Check 2-2-3 FIRST, before week-on/week-off, because
+        # 2-2-3 descriptions often contain "alternates" which would incorrectly match week-on/week-off
+        if re.search(r'2\s*-\s*2\s*-\s*3|two.*two.*three', text_lower):
             parsed_data["custodySchedule"] = "2-2-3 schedule"
+        elif re.search(r'week.*on.*week.*off|alternat.*week', text_lower):
+            parsed_data["custodySchedule"] = "Week-on/week-off"
         
         return parsed_data
     
