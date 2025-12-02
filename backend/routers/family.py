@@ -452,6 +452,7 @@ async def get_custody_distribution(period: str = "yearly", current_user: User = 
     """
     Calculate and return the custody distribution for the current family.
     Can be filtered by period: 'weekly' or 'yearly'.
+    Calculates based on custody schedule type (2-2-3, week-on-week-off, etc.)
     """
     user_family = db.families.find_one({"$or": [{"parent1_email": current_user.email}, {"parent2_email": current_user.email}]})
 
@@ -459,59 +460,64 @@ async def get_custody_distribution(period: str = "yearly", current_user: User = 
         raise HTTPException(status_code=404, detail="Family profile not found")
 
     family_id = user_family["id"]
-    parent1_email = user_family.get("parent1_email")
-    parent2_email = user_family.get("parent2_email")
     parent1_name = user_family.get("parent1_name", "Parent 1")
     parent2_name = user_family.get("parent2_name", "Parent 2")
 
-    if not parent1_email or not parent2_email:
-        raise HTTPException(status_code=400, detail="Family is not fully linked")
-
-    # Define date range for query
-    today = datetime.now(timezone.utc).date()
-    if period == "weekly":
-        start_of_week = today - timedelta(days=today.weekday())
-        end_of_week = start_of_week + timedelta(days=6)
-        query = {
-            "family_id": family_id,
-            "type": "custody",
-            "date": {
-                "$gte": start_of_week.isoformat(),
-                "$lte": end_of_week.isoformat()
-            }
-        }
-    else:  # yearly
-        start_of_year = date(today.year, 1, 1)
-        end_of_year = date(today.year, 12, 31)
-        query = {
-            "family_id": family_id,
-            "type": "custody",
-            "date": {
-                "$gte": start_of_year.isoformat(),
-                "$lte": end_of_year.isoformat()
-            }
-        }
-
-    # Fetch calendar events for the specified period
-    events = list(db.events.find(query))
-
-    total_days = len(events)
-    if total_days == 0:
+    # Get custody agreement to determine schedule type
+    contract = db.contracts.find_one({"family_id": family_id})
+    if not contract or not contract.get("custodySchedule"):
         return {
             "parent1": {"name": parent1_name, "days": 0, "percentage": 0},
             "parent2": {"name": parent2_name, "days": 0, "percentage": 0},
             "total_days": 0
         }
 
+    custody_schedule = contract.get("custodySchedule", "").lower()
+    
+    # Define date range
+    today = datetime.now(timezone.utc).date()
+    if period == "weekly":
+        # Calculate for current week (Monday to Sunday)
+        start_of_week = today - timedelta(days=today.weekday())
+        total_days = 7
+        reference_date = date(today.year, 1, 1)
+        start_date = start_of_week
+    else:  # yearly
+        # Calculate for full year
+        total_days = 365
+        reference_date = date(today.year, 1, 1)
+        start_date = reference_date
+
     parent1_days = 0
     parent2_days = 0
 
-    for event in events:
-        parent_email = event.get("parent")
-        if parent_email == parent1_email:
-            parent1_days += 1
-        elif parent_email == parent2_email:
-            parent2_days += 1
+    # Calculate custody distribution based on schedule type
+    if "2-2-3" in custody_schedule or "two-two-three" in custody_schedule:
+        # 2-2-3 Schedule (14-day cycle)
+        # Pattern: P1(2), P2(2), P1(3), P2(2), P1(2), P2(3)
+        # Day indices: [0,1]=P1, [2,3]=P2, [4,5,6]=P1, [7,8]=P2, [9,10]=P1, [11,12,13]=P2
+        pattern = [1, 1, 2, 2, 1, 1, 1, 2, 2, 1, 1, 2, 2, 2]  # 1=parent1, 2=parent2
+        
+        for day_offset in range(total_days):
+            current_date = start_date + timedelta(days=day_offset)
+            days_since_reference = (current_date - reference_date).days
+            day_in_cycle = days_since_reference % 14
+            
+            if pattern[day_in_cycle] == 1:
+                parent1_days += 1
+            else:
+                parent2_days += 1
+    else:
+        # Default: Week-on/week-off (alternating weeks)
+        for day_offset in range(total_days):
+            current_date = start_date + timedelta(days=day_offset)
+            days_since_reference = (current_date - reference_date).days
+            week_number = days_since_reference // 7
+            
+            if week_number % 2 == 0:
+                parent1_days += 1
+            else:
+                parent2_days += 1
 
     parent1_percentage = round((parent1_days / total_days) * 100, 1) if total_days > 0 else 0
     parent2_percentage = round((parent2_days / total_days) * 100, 1) if total_days > 0 else 0
