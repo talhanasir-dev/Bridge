@@ -8,7 +8,7 @@ from datetime import datetime, date, timedelta, timezone
 import base64
 import re
 
-from models import Family, FamilyCreate, FamilyLink, ContractUpload, CustodyAgreement, Child, ChildCreate, ChildUpdate, User
+from models import Family, FamilyCreate, FamilyLink, ContractUpload, CustodyAgreement, Child, ChildCreate, ChildUpdate, User, CustodyManualData
 from routers.auth import get_current_user
 from database import db
 
@@ -521,3 +521,90 @@ async def get_custody_distribution(period: str = "yearly", current_user: User = 
         "parent2": {"name": parent2_name, "days": parent2_days, "percentage": parent2_percentage},
         "total_days": total_days
     }
+
+@router.post("/api/v1/family/custody-manual")
+async def save_manual_custody(data: CustodyManualData, current_user: User = Depends(get_current_user)):
+    """Save manually entered custody agreement information."""
+    # Find the user's family
+    user_family = db.families.find_one({"$or": [{"parent1_email": current_user.email}, {"parent2_email": current_user.email}]})
+    
+    if not user_family:
+        raise HTTPException(status_code=404, detail="Family profile not found")
+    
+    try:
+        # Create custody agreement object
+        custody_agreement = CustodyAgreement(
+            uploadDate=datetime.utcnow(),
+            fileName="Manual Entry",
+            fileType="manual",
+            fileContent=None,
+            custodySchedule=data.custodySchedule,
+            holidaySchedule=data.holidaySchedule,
+            decisionMaking=data.decisionMaking,
+            expenseSplit={
+                "ratio": data.expenseSplitRatio,
+                "parent1": data.expenseParent1,
+                "parent2": data.expenseParent2
+            },
+            parsedData={
+                "custodySchedule": data.custodySchedule,
+                "holidaySchedule": data.holidaySchedule,
+                "decisionMaking": data.decisionMaking,
+                "expenseSplit": {
+                    "ratio": data.expenseSplitRatio,
+                    "parent1": data.expenseParent1,
+                    "parent2": data.expenseParent2
+                }
+            }
+        )
+        
+        # Update family with custody agreement
+        db.families.update_one(
+            {"_id": user_family["_id"]},
+            {"$set": {"custodyAgreement": custody_agreement.model_dump()}}
+        )
+        
+        # Generate calendar events from the new agreement
+        from services.calendar_generator import generate_custody_events
+        generate_custody_events(user_family["id"], custody_agreement.model_dump())
+        
+        return {
+            "message": "Custody information saved successfully",
+            "custodyAgreement": custody_agreement
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error saving custody information: {str(e)}"
+        )
+
+@router.delete("/api/v1/family/contract")
+async def delete_contract(current_user: User = Depends(get_current_user)):
+    """Delete custody agreement and associated events."""
+    # Find the user's family
+    user_family = db.families.find_one({"$or": [{"parent1_email": current_user.email}, {"parent2_email": current_user.email}]})
+    
+    if not user_family:
+        raise HTTPException(status_code=404, detail="Family profile not found")
+    
+    try:
+        # Remove custody agreement from family
+        db.families.update_one(
+            {"_id": user_family["_id"]},
+            {"$unset": {"custodyAgreement": ""}}
+        )
+        
+        # Delete future custody events
+        db.events.delete_many({
+            "family_id": user_family["id"],
+            "type": "custody"
+        })
+        
+        return {"message": "Custody agreement and associated events deleted successfully"}
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error deleting custody agreement: {str(e)}"
+        )

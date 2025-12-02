@@ -20,7 +20,12 @@ def generate_custody_events(family_id: str, custody_agreement: dict):
     # Clear existing custody events for this family
     db.events.delete_many({"family_id": family_id, "type": "custody"})
 
-    start_date = date.today()
+    # Use January 1st of current year as reference date for consistent pattern
+    today = date.today()
+    reference_date = date(today.year, 1, 1)
+    
+    # Generate events from today to 365 days in the future
+    start_date = today
     end_date = start_date + timedelta(days=365)
     current_date = start_date
     
@@ -46,8 +51,9 @@ def generate_custody_events(family_id: str, custody_agreement: dict):
         cycle_length = 14
         
         while current_date <= end_date:
-            days_since_start = (current_date - start_date).days
-            day_index = days_since_start % cycle_length
+            # Calculate days since reference date (Jan 1st) for consistent pattern
+            days_since_reference = (current_date - reference_date).days
+            day_index = days_since_reference % cycle_length
             current_parent = pattern[day_index]
             
             event = Event(
@@ -62,14 +68,13 @@ def generate_custody_events(family_id: str, custody_agreement: dict):
             
     else:
         # Default: Week-on/week-off (Alternating Weeks)
-        # Switch every 7 days
-        current_parent = parent1_email
-        
+        # Use reference date for consistent pattern
         while current_date <= end_date:
-            # Switch parent every 7 days
-            days_since_start = (current_date - start_date).days
-            if days_since_start > 0 and days_since_start % 7 == 0:
-                current_parent = parent2_email if current_parent == parent1_email else parent1_email
+            # Calculate which week we're in from reference date
+            days_since_reference = (current_date - reference_date).days
+            week_number = days_since_reference // 7
+            # Alternate weeks: even weeks = Parent 1, odd weeks = Parent 2
+            current_parent = parent1_email if week_number % 2 == 0 else parent2_email
                 
             event = Event(
                 family_id=family_id,

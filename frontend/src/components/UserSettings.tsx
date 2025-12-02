@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { User, Bell, Shield, Globe, Heart, Camera, MessageSquare, BookOpen, Languages, Users, FileText, Upload, X, Loader2, CheckCircle, AlertCircle, Eye } from 'lucide-react';
+import { User, Bell, Shield, Globe, Heart, Camera, MessageSquare, BookOpen, Languages, Users, FileText, Upload, X, Loader2, CheckCircle, AlertCircle, Eye, Trash2, Edit } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -106,6 +106,23 @@ const UserSettings: React.FC<UserSettingsProps> = ({ initialProfile, familyProfi
   const [loadingCustody, setLoadingCustody] = useState(false);
   const [custodyViewPeriod, setCustodyViewPeriod] = useState<'weekly' | 'yearly'>('weekly');
 
+  // Manual entry state
+  const [entryMode, setEntryMode] = useState<'upload' | 'manual'>('upload');
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [savingManualEntry, setSavingManualEntry] = useState(false);
+  const [manualData, setManualData] = useState({
+    scheduleType: 'week-on-week-off' as 'week-on-week-off' | '2-2-3' | 'custom',
+    customDays: {
+      parent1: [] as string[],
+      parent2: [] as string[]
+    },
+    holidaySchedule: '',
+    decisionMaking: '',
+    expenseSplitType: '50-50' as '50-50' | '60-40' | '70-30' | 'custom',
+    expenseParent1: 50,
+    expenseParent2: 50
+  });
+
   const applyProfileToSettings = (profile: UserProfileInfo) => {
     setSettings(prev => ({
       ...prev,
@@ -186,6 +203,31 @@ const UserSettings: React.FC<UserSettingsProps> = ({ initialProfile, familyProfi
 
     loadAgreement();
   }, [familyProfile]);
+
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDeleteAgreement = async () => {
+    try {
+      setLoadingAgreement(true);
+      await familyAPI.deleteContract();
+      setCustodyAgreement(null);
+      setShowDeleteConfirm(false);
+      toast({
+        title: "Agreement deleted",
+        description: "Custody agreement and associated events have been removed.",
+      });
+      loadCustodyDistribution(custodyViewPeriod);
+    } catch (error) {
+      console.error('Error deleting agreement:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete agreement",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingAgreement(false);
+    }
+  };
 
   const loadCustodyDistribution = async (period: 'weekly' | 'yearly') => {
     if (!familyProfile) return;
@@ -441,6 +483,124 @@ const UserSettings: React.FC<UserSettingsProps> = ({ initialProfile, familyProfi
         description: error instanceof Error ? error.message : "Failed to open document",
         variant: "destructive",
       });
+    }
+  };
+
+  // Manual entry handlers
+  const handleScheduleTypeChange = (type: 'week-on-week-off' | '2-2-3' | 'custom') => {
+    setManualData(prev => ({ ...prev, scheduleType: type }));
+  };
+
+  const handleCustomDayToggle = (parent: 'parent1' | 'parent2', day: string) => {
+    setManualData(prev => {
+      const currentDays = prev.customDays[parent];
+      const newDays = currentDays.includes(day)
+        ? currentDays.filter(d => d !== day)
+        : [...currentDays, day];
+      return {
+        ...prev,
+        customDays: {
+          ...prev.customDays,
+          [parent]: newDays
+        }
+      };
+    });
+  };
+
+  const handleExpenseSplitChange = (type: '50-50' | '60-40' | '70-30' | 'custom') => {
+    setManualData(prev => {
+      if (type === '50-50') {
+        return { ...prev, expenseSplitType: type, expenseParent1: 50, expenseParent2: 50 };
+      } else if (type === '60-40') {
+        return { ...prev, expenseSplitType: type, expenseParent1: 60, expenseParent2: 40 };
+      } else if (type === '70-30') {
+        return { ...prev, expenseSplitType: type, expenseParent1: 70, expenseParent2: 30 };
+      } else {
+        return { ...prev, expenseSplitType: type };
+      }
+    });
+  };
+
+  const handleSaveManualEntry = async () => {
+    // Validate custom schedule
+    if (manualData.scheduleType === 'custom') {
+      if (manualData.customDays.parent1.length === 0 && manualData.customDays.parent2.length === 0) {
+        toast({
+          title: "Validation Error",
+          description: "Please select at least one day for custody schedule",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    // Validate expense split for custom
+    if (manualData.expenseSplitType === 'custom') {
+      const total = manualData.expenseParent1 + manualData.expenseParent2;
+      if (Math.abs(total - 100) > 0.01) {
+        toast({
+          title: "Validation Error",
+          description: "Expense split percentages must add up to 100%",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    setSavingManualEntry(true);
+
+    try {
+      // Build custody schedule string based on type
+      let custodySchedule = '';
+      if (manualData.scheduleType === 'week-on-week-off') {
+        custodySchedule = 'Week-on/week-off alternating schedule';
+      } else if (manualData.scheduleType === '2-2-3') {
+        custodySchedule = '2-2-3 schedule (2 days parent 1, 2 days parent 2, 3 days parent 1, then alternates)';
+      } else {
+        const p1Days = manualData.customDays.parent1.join(', ');
+        const p2Days = manualData.customDays.parent2.join(', ');
+        custodySchedule = `Custom schedule: ${familyProfile?.parent1?.firstName || 'Parent 1'} has custody on ${p1Days}. ${familyProfile?.parent2?.firstName || 'Parent 2'} has custody on ${p2Days}.`;
+      }
+
+      const response = await familyAPI.saveManualCustody({
+        custodySchedule,
+        holidaySchedule: manualData.holidaySchedule || undefined,
+        decisionMaking: manualData.decisionMaking || undefined,
+        expenseSplitRatio: `${manualData.expenseParent1}-${manualData.expenseParent2}`,
+        expenseParent1: manualData.expenseParent1,
+        expenseParent2: manualData.expenseParent2,
+      });
+
+      setCustodyAgreement(response.custodyAgreement || response);
+      setShowManualEntry(false);
+      
+      // Reset form
+      setManualData({
+        scheduleType: 'week-on-week-off',
+        customDays: { parent1: [], parent2: [] },
+        holidaySchedule: '',
+        decisionMaking: '',
+        expenseSplitType: '50-50',
+        expenseParent1: 50,
+        expenseParent2: 50
+      });
+
+      toast({
+        title: "Success!",
+        description: "Custody information saved successfully",
+      });
+
+      // Refresh custody distribution
+      loadCustodyDistribution(custodyViewPeriod);
+    } catch (error) {
+      console.error('Error saving manual entry:', error);
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to save custody information",
+        variant: "destructive",
+      });
+    } finally {
+      setSavingManualEntry(false);
     }
   };
 
@@ -1055,26 +1215,54 @@ const UserSettings: React.FC<UserSettingsProps> = ({ initialProfile, familyProfi
                                 )}
                               </div>
                             </div>
-                            <div className="flex space-x-2">
+                            <div className="flex flex-wrap gap-2">
+                              {custodyAgreement.fileType !== 'manual' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={handleViewDocument}
+                                  disabled={!custodyAgreement.fileContent}
+                                  className="border-blue-300 text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title={!custodyAgreement.fileContent ? "Original file not available. Please re-upload to enable viewing." : custodyAgreement.fileType?.toLowerCase() === 'pdf' ? "View the document in a new tab" : "Download the document"}
+                                >
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  View
+                                </Button>
+                              )}
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={handleViewDocument}
-                                disabled={!custodyAgreement.fileContent}
-                                className="border-blue-300 text-blue-700 hover:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={!custodyAgreement.fileContent ? "Original file not available. Please re-upload to enable viewing." : custodyAgreement.fileType?.toLowerCase() === 'pdf' ? "View the document in a new tab" : "Download the document"}
-                              >
-                                <Eye className="w-4 h-4 mr-2" />
-                                View
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => setShowUploadAgreement(true)}
+                                onClick={() => {
+                                  setEntryMode('manual');
+                                  setShowManualEntry(true);
+                                }}
                                 className="border-blue-300 text-blue-700 hover:bg-blue-100"
                               >
-                                <Upload className="w-4 h-4 mr-2" />
-                                Update
+                                <Edit className="w-4 h-4 mr-2" />
+                                Edit Info
+                              </Button>
+                              {custodyAgreement.fileType !== 'manual' && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => {
+                                    setEntryMode('upload');
+                                    setShowUploadAgreement(true);
+                                  }}
+                                  className="border-blue-300 text-blue-700 hover:bg-blue-100"
+                                >
+                                  <Upload className="w-4 h-4 mr-2" />
+                                  Re-upload
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setShowDeleteConfirm(true)}
+                                className="border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                              >
+                                <Trash2 className="w-4 h-4 mr-2" />
+                                Delete
                               </Button>
                             </div>
                           </div>
@@ -1122,16 +1310,32 @@ const UserSettings: React.FC<UserSettingsProps> = ({ initialProfile, familyProfi
                         <Alert className="mb-4">
                           <AlertCircle className="w-4 h-4" />
                           <AlertDescription>
-                            No custody agreement uploaded yet. Upload your divorce agreement to automatically extract custody schedules, expense splits, and other important terms.
+                            No custody agreement configured yet. You can either upload your divorce agreement for automatic parsing or enter the information manually.
                           </AlertDescription>
                         </Alert>
-                        <Button
-                          onClick={() => setShowUploadAgreement(true)}
-                          className="bg-gradient-to-r from-blue-500 to-purple-600"
-                        >
-                          <Upload className="w-4 h-4 mr-2" />
-                          Upload Agreement
-                        </Button>
+                        <div className="flex justify-center space-x-3">
+                          <Button
+                            onClick={() => {
+                              setEntryMode('upload');
+                              setShowUploadAgreement(true);
+                            }}
+                            className="bg-gradient-to-r from-blue-500 to-purple-600"
+                          >
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload Agreement
+                          </Button>
+                          <Button
+                            onClick={() => {
+                              setEntryMode('manual');
+                              setShowManualEntry(true);
+                            }}
+                            variant="outline"
+                            className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                          >
+                            <Edit className="w-4 h-4 mr-2" />
+                            Enter Manually
+                          </Button>
+                        </div>
                       </div>
                     )}
 
@@ -1245,6 +1449,266 @@ const UserSettings: React.FC<UserSettingsProps> = ({ initialProfile, familyProfi
                         </div>
                       </div>
                     )}
+
+                    {/* Manual Entry Form */}
+                    {showManualEntry && (
+                      <div className="mt-4 pt-4 border-t border-blue-200">
+                        <div className="space-y-6">
+                          <div className="flex items-center justify-between">
+                            <h4 className="font-semibold text-gray-800">
+                              {custodyAgreement ? 'Update' : 'Enter'} Custody Information Manually
+                            </h4>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setShowManualEntry(false);
+                              }}
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+
+                          {/* Custody Schedule Type */}
+                          <div>
+                            <Label className="text-sm font-semibold text-gray-800 mb-2 block">
+                              Custody Schedule Type
+                            </Label>
+                            <Select 
+                              value={manualData.scheduleType} 
+                              onValueChange={handleScheduleTypeChange}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="week-on-week-off">
+                                  <div>
+                                    <div className="font-medium">Week-on/Week-off</div>
+                                    <div className="text-xs text-gray-500">Alternating weeks with each parent</div>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="2-2-3">
+                                  <div>
+                                    <div className="font-medium">2-2-3 Schedule</div>
+                                    <div className="text-xs text-gray-500">2 days, 2 days, then 3 days alternating</div>
+                                  </div>
+                                </SelectItem>
+                                <SelectItem value="custom">
+                                  <div>
+                                    <div className="font-medium">Custom Schedule</div>
+                                    <div className="text-xs text-gray-500">Select specific days for each parent</div>
+                                  </div>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Custom Days Selector */}
+                          {manualData.scheduleType === 'custom' && (
+                            <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                              <div>
+                                <Label className="text-sm font-semibold text-gray-800 mb-3 block">
+                                  {familyProfile?.parent1?.firstName || 'Parent 1'}'s Custody Days
+                                </Label>
+                                <div className="grid grid-cols-7 gap-2">
+                                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+                                    <div key={`p1-${day}`} className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id={`parent1-${day}`}
+                                        checked={manualData.customDays.parent1.includes(day)}
+                                        onCheckedChange={() => handleCustomDayToggle('parent1', day)}
+                                      />
+                                      <Label 
+                                        htmlFor={`parent1-${day}`}
+                                        className="text-xs font-medium cursor-pointer"
+                                      >
+                                        {day}
+                                      </Label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div>
+                                <Label className="text-sm font-semibold text-gray-800 mb-3 block">
+                                  {familyProfile?.parent2?.firstName || 'Parent 2'}'s Custody Days
+                                </Label>
+                                <div className="grid grid-cols-7 gap-2">
+                                  {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day) => (
+                                    <div key={`p2-${day}`} className="flex items-center space-x-2">
+                                      <Checkbox
+                                        id={`parent2-${day}`}
+                                        checked={manualData.customDays.parent2.includes(day)}
+                                        onCheckedChange={() => handleCustomDayToggle('parent2', day)}
+                                      />
+                                      <Label 
+                                        htmlFor={`parent2-${day}`}
+                                        className="text-xs font-medium cursor-pointer"
+                                      >
+                                        {day}
+                                      </Label>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <Alert>
+                                <AlertDescription className="text-xs">
+                                  Select the days of the week when each parent has custody. Days can overlap if custody is shared on certain days.
+                                </AlertDescription>
+                              </Alert>
+                            </div>
+                          )}
+
+                          {/* Holiday Schedule */}
+                          <div>
+                            <Label htmlFor="holidaySchedule" className="text-sm font-semibold text-gray-800 mb-2 block">
+                              Holiday Schedule (Optional)
+                            </Label>
+                            <Textarea
+                              id="holidaySchedule"
+                              value={manualData.holidaySchedule}
+                              onChange={(e) => setManualData(prev => ({ ...prev, holidaySchedule: e.target.value }))}
+                              placeholder="e.g., Thanksgiving alternates yearly. Parent 1 has Christmas Eve, Parent 2 has Christmas Day."
+                              rows={3}
+                              className="mt-1"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Describe how holidays are split between parents
+                            </p>
+                          </div>
+
+                          {/* Decision Making */}
+                          <div>
+                            <Label htmlFor="decisionMaking" className="text-sm font-semibold text-gray-800 mb-2 block">
+                              Decision Making (Optional)
+                            </Label>
+                            <Textarea
+                              id="decisionMaking"
+                              value={manualData.decisionMaking}
+                              onChange={(e) => setManualData(prev => ({ ...prev, decisionMaking: e.target.value }))}
+                              placeholder="e.g., Joint decision-making for medical and educational matters. Parent 1 makes day-to-day decisions during their custody time."
+                              rows={3}
+                              className="mt-1"
+                            />
+                            <p className="text-xs text-gray-500 mt-1">
+                              Describe how major decisions are made for the children
+                            </p>
+                          </div>
+
+                          {/* Expense Split */}
+                          <div>
+                            <Label className="text-sm font-semibold text-gray-800 mb-2 block">
+                              Expense Split Ratio
+                            </Label>
+                            <Select 
+                              value={manualData.expenseSplitType} 
+                              onValueChange={handleExpenseSplitChange}
+                            >
+                              <SelectTrigger className="mt-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="50-50">50/50 - Equal split</SelectItem>
+                                <SelectItem value="60-40">60/40 split</SelectItem>
+                                <SelectItem value="70-30">70/30 split</SelectItem>
+                                <SelectItem value="custom">Custom split</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {/* Custom Expense Split */}
+                          {manualData.expenseSplitType === 'custom' && (
+                            <div className="grid grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                              <div>
+                                <Label htmlFor="expenseParent1" className="text-sm font-medium">
+                                  {familyProfile?.parent1?.firstName || 'Parent 1'} %
+                                </Label>
+                                <Input
+                                  id="expenseParent1"
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={manualData.expenseParent1}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setManualData(prev => ({ 
+                                      ...prev, 
+                                      expenseParent1: val,
+                                      expenseParent2: 100 - val
+                                    }));
+                                  }}
+                                  className="mt-1"
+                                />
+                              </div>
+                              <div>
+                                <Label htmlFor="expenseParent2" className="text-sm font-medium">
+                                  {familyProfile?.parent2?.firstName || 'Parent 2'} %
+                                </Label>
+                                <Input
+                                  id="expenseParent2"
+                                  type="number"
+                                  min="0"
+                                  max="100"
+                                  value={manualData.expenseParent2}
+                                  onChange={(e) => {
+                                    const val = parseFloat(e.target.value) || 0;
+                                    setManualData(prev => ({ 
+                                      ...prev, 
+                                      expenseParent2: val,
+                                      expenseParent1: 100 - val
+                                    }));
+                                  }}
+                                  className="mt-1"
+                                />
+                              </div>
+                              <p className="text-xs text-gray-500 col-span-2">
+                                Total: {manualData.expenseParent1 + manualData.expenseParent2}% 
+                                {Math.abs((manualData.expenseParent1 + manualData.expenseParent2) - 100) > 0.01 && 
+                                  <span className="text-red-600 ml-1">(Must equal 100%)</span>
+                                }
+                              </p>
+                            </div>
+                          )}
+
+                          <div className="flex space-x-3">
+                            <Button
+                              onClick={handleSaveManualEntry}
+                              disabled={savingManualEntry}
+                              className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600"
+                            >
+                              {savingManualEntry ? (
+                                <>
+                                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                  Saving...
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4 mr-2" />
+                                  Save Custody Information
+                                </>
+                              )}
+                            </Button>
+                            <Button
+                              onClick={() => {
+                                setShowManualEntry(false);
+                              }}
+                              variant="outline"
+                              disabled={savingManualEntry}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+
+                          <Alert>
+                            <AlertDescription className="text-xs">
+                              This information will be used to generate custody events on your calendar and calculate expense splits.
+                            </AlertDescription>
+                          </Alert>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1252,6 +1716,22 @@ const UserSettings: React.FC<UserSettingsProps> = ({ initialProfile, familyProfi
           </Card>
         </Tabs>
       </div>
+
+      {/* Delete Confirmation Dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Custody Agreement?</h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete this agreement? This will also remove all associated custody events from your calendar. This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDeleteAgreement}>Delete</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -901,81 +901,70 @@ const CalendarView: React.FC<CalendarViewProps> = ({
    * Supports various schedule types: week-on/week-off, 2-2-3, custom schedules
    */
   const getCustodyParentForDay = (day: number): 'mom' | 'dad' | 'both' | null => {
-    if (!familyProfile) {
+    // ONLY show custody colors if there's an actual custody agreement configured
+    // Don't show colors based on just the custody arrangement setting
+    if (!familyProfile || !custodyAgreement || !custodyAgreement.custodySchedule) {
       return null;
     }
 
     const date = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), day);
-    const custodySchedule = custodyAgreement?.custodySchedule?.toLowerCase() || '';
-    const arrangement = familyProfile.custodyArrangement;
+    const custodySchedule = custodyAgreement.custodySchedule.toLowerCase();
 
-    // If we have a custody agreement with a schedule, parse it
-    if (custodyAgreement && custodySchedule) {
-      // Parse different schedule types
+    // 2-2-3 schedule (14-day cycle) - CHECK THIS FIRST before week-on/week-off
+    // because 2-2-3 description may contain "alternates" which would incorrectly match week-on/week-off
+    // Pattern: P1(2), P2(2), P1(3), P2(2), P1(2), P2(3) - repeats every 14 days
+    if (custodySchedule.includes('2-2-3') || custodySchedule.includes('two-two-three')) {
+      const referenceDate = new Date(date.getFullYear(), 0, 1); // January 1st
+      const daysSinceReference = Math.floor((date.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
       
-      // Week-on/week-off or alternating weeks
-      if (custodySchedule.includes('week-on') || custodySchedule.includes('week off') || 
-          custodySchedule.includes('alternat') || custodySchedule.includes('week-on/week-off')) {
-        const yearStart = new Date(date.getFullYear(), 0, 1);
-        const daysSinceYearStart = Math.floor((date.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24));
-        const weekNumber = Math.floor(daysSinceYearStart / 7);
-        // Alternate weeks: even weeks = Parent 1 (mom), odd weeks = Parent 2 (dad)
-        return weekNumber % 2 === 0 ? 'mom' : 'dad';
-      }
+      // 14-day pattern: [P1, P1, P2, P2, P1, P1, P1, P2, P2, P1, P1, P2, P2, P2]
+      const pattern = ['mom', 'mom', 'dad', 'dad', 'mom', 'mom', 'mom', 'dad', 'dad', 'mom', 'mom', 'dad', 'dad', 'dad'];
+      const dayInCycle = daysSinceReference % 14;
       
-      // 2-2-3 schedule (14-day cycle)
-      // Week 1: Parent 1 (Mon-Tue), Parent 2 (Wed-Thu), Both (Fri-Sun)
-      // Week 2: Parent 2 (Mon-Tue), Parent 1 (Wed-Thu), Both (Fri-Sun)
-      if (custodySchedule.includes('2-2-3') || custodySchedule.includes('two-two-three')) {
-        const yearStart = new Date(date.getFullYear(), 0, 1);
-        const daysSinceYearStart = Math.floor((date.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24));
-        const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const weekNumber = Math.floor(daysSinceYearStart / 7);
-        const isEvenWeek = weekNumber % 2 === 0;
-        
-        // Weekend (Fri-Sun) is always both parents
-        if (dayOfWeek === 0 || dayOfWeek === 6 || dayOfWeek === 5) {
-          return 'both';
-        }
-        
-        // Weekdays: Mon-Tue and Wed-Thu alternate by week
-        if (dayOfWeek === 1 || dayOfWeek === 2) {
-          // Monday-Tuesday
-          return isEvenWeek ? 'mom' : 'dad';
-        } else if (dayOfWeek === 3 || dayOfWeek === 4) {
-          // Wednesday-Thursday
-          return isEvenWeek ? 'dad' : 'mom';
-        }
-      }
-      
-      // Every other week (similar to week-on/week-off)
-      if (custodySchedule.includes('every other week') || custodySchedule.includes('every other')) {
-        const yearStart = new Date(date.getFullYear(), 0, 1);
-        const daysSinceYearStart = Math.floor((date.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24));
-        const weekNumber = Math.floor(daysSinceYearStart / 7);
-        return weekNumber % 2 === 0 ? 'mom' : 'dad';
-      }
-      
-      // Default: fall back to week-on/week-off for 50/50
-      if (arrangement === '50-50') {
-        const yearStart = new Date(date.getFullYear(), 0, 1);
-        const daysSinceYearStart = Math.floor((date.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24));
-        const weekNumber = Math.floor(daysSinceYearStart / 7);
-        return weekNumber % 2 === 0 ? 'mom' : 'dad';
-      }
+      return pattern[dayInCycle] as 'mom' | 'dad';
     }
 
-    // Fallback: use arrangement type if no agreement
-    if (arrangement === '50-50') {
-      const yearStart = new Date(date.getFullYear(), 0, 1);
-      const daysSinceYearStart = Math.floor((date.getTime() - yearStart.getTime()) / (1000 * 60 * 60 * 24));
-      const weekNumber = Math.floor(daysSinceYearStart / 7);
+    // Week-on/week-off or alternating weeks
+    if (custodySchedule.includes('week-on') || custodySchedule.includes('week off') || 
+        custodySchedule.includes('alternat') || custodySchedule.includes('week-on/week-off')) {
+      const referenceDate = new Date(date.getFullYear(), 0, 1); // January 1st
+      const daysSinceReference = Math.floor((date.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
+      const weekNumber = Math.floor(daysSinceReference / 7);
+      // Alternate weeks: even weeks = Parent 1 (mom), odd weeks = Parent 2 (dad)
       return weekNumber % 2 === 0 ? 'mom' : 'dad';
     }
     
-    // Primary-secondary: Parent 1 has primary custody
-    if (arrangement === 'primary-secondary') {
-      return 'mom'; // Parent 1 is primary
+    // Every other week (similar to week-on/week-off)
+    if (custodySchedule.includes('every other week') || custodySchedule.includes('every other')) {
+      const referenceDate = new Date(date.getFullYear(), 0, 1);
+      const daysSinceReference = Math.floor((date.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
+      const weekNumber = Math.floor(daysSinceReference / 7);
+      return weekNumber % 2 === 0 ? 'mom' : 'dad';
+    }
+
+    // Custom schedule - try to parse day names from the schedule string
+    if (custodySchedule.includes('custom') || custodySchedule.includes('custody on')) {
+      const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+      const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+      const dayName = dayNames[dayOfWeek];
+      
+      // Check if this day is mentioned for parent 1 or parent 2
+      const parent1Section = custodySchedule.split('parent 2')[0] || custodySchedule;
+      const parent2Section = custodySchedule.split('parent 2')[1] || '';
+      
+      if (parent1Section.includes(dayName)) {
+        return 'mom';
+      } else if (parent2Section.includes(dayName)) {
+        return 'dad';
+      }
+    }
+
+    // Default fallback for any 50-50 type schedule in agreement
+    if (custodySchedule.includes('50') || custodySchedule.includes('equal') || custodySchedule.includes('split')) {
+      const referenceDate = new Date(date.getFullYear(), 0, 1);
+      const daysSinceReference = Math.floor((date.getTime() - referenceDate.getTime()) / (1000 * 60 * 60 * 24));
+      const weekNumber = Math.floor(daysSinceReference / 7);
+      return weekNumber % 2 === 0 ? 'mom' : 'dad';
     }
 
     return null;
@@ -1624,29 +1613,58 @@ const CalendarView: React.FC<CalendarViewProps> = ({
       {/* Legend */}
         <div className="mt-6 space-y-3">
           {/* Custody Schedule Legend */}
-          {(familyProfile?.custodyArrangement === '50-50' || familyProfile?.custodyArrangement === 'primary-secondary' || custodyAgreement) && (
-            <div className="flex flex-wrap gap-4 text-sm p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <div className="font-semibold text-gray-700 w-full mb-2">
-                Custody Schedule
-                {custodyAgreement?.custodySchedule && (
-                  <span className="text-xs font-normal text-gray-500 ml-2">
-                    ({custodyAgreement.custodySchedule})
-                  </span>
-                )}
-                :
+          {custodyAgreement?.custodySchedule ? (
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
+              <div className="font-bold text-gray-800 text-base mb-3 flex items-center gap-2 flex-wrap">
+                <span className="text-blue-600">📅</span>
+                <span>Custody Schedule:</span>
+                <span className="text-sm font-semibold text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
+                  {custodyAgreement.custodySchedule.toLowerCase().includes('2-2-3') || custodyAgreement.custodySchedule.toLowerCase().includes('two-two-three') 
+                    ? '2-2-3 Schedule'
+                    : custodyAgreement.custodySchedule.toLowerCase().includes('week-on') || custodyAgreement.custodySchedule.toLowerCase().includes('week off') || custodyAgreement.custodySchedule.toLowerCase().includes('alternat')
+                    ? 'Week-on/Week-off'
+                    : custodyAgreement.custodySchedule.toLowerCase().includes('custom')
+                    ? 'Custom Schedule'
+                    : custodyAgreement.custodySchedule}
+                </span>
               </div>
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-[hsl(214,100%,98%)] border-2 border-[hsl(214,100%,70%)] rounded mr-2"></div>
-                <span>{getParentDisplayName('mom')} Days</span>
+              <p className="text-xs text-gray-600 mb-3">
+                {custodyAgreement.custodySchedule.toLowerCase().includes('2-2-3') 
+                  ? '2 days parent 1 → 2 days parent 2 → 3 days parent 1, then alternates (14-day cycle)'
+                  : custodyAgreement.custodySchedule.toLowerCase().includes('week-on') || custodyAgreement.custodySchedule.toLowerCase().includes('alternat')
+                  ? 'Parents alternate full weeks with the children'
+                  : 'Schedule based on your custody agreement'}
+              </p>
+              <div className="flex flex-wrap gap-6 text-sm">
+                <div className="flex items-center">
+                  <div className="w-6 h-6 bg-[hsl(214,100%,96%)] border-2 border-[hsl(214,100%,21%)] rounded mr-2"></div>
+                  <span className="font-medium">{getParentDisplayName('mom')} Days</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-6 h-6 bg-[hsl(47,100%,96%)] border-2 border-[hsl(47,100%,50%)] rounded mr-2"></div>
+                  <span className="font-medium">{getParentDisplayName('dad')} Days</span>
+                </div>
+                <div className="flex items-center">
+                  <div className="w-6 h-6 bg-[hsl(160,80%,98%)] border-2 border-[hsl(160,80%,70%)] rounded mr-2"></div>
+                  <span className="font-medium">Both Parents</span>
+                </div>
               </div>
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-[hsl(47,100%,98%)] border-2 border-[hsl(47,100%,70%)] rounded mr-2"></div>
-                <span>{getParentDisplayName('dad')} Days</span>
+            </div>
+          ) : (familyProfile?.custodyArrangement === '50-50' || familyProfile?.custodyArrangement === 'primary-secondary') && (
+            <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 rounded-lg border-2 border-amber-200">
+              <div className="font-bold text-amber-800 text-base mb-2 flex items-center gap-2">
+                <span>⚠️</span>
+                <span>No Custody Schedule Configured</span>
               </div>
-              <div className="flex items-center">
-                <div className="w-4 h-4 bg-[hsl(160,80%,98%)] border-2 border-[hsl(160,80%,70%)] rounded mr-2"></div>
-                <span>Both Parents</span>
-              </div>
+              <p className="text-sm text-amber-700 mb-3">
+                Configure your custody schedule to see color-coded days on the calendar showing which parent has custody.
+              </p>
+              <a 
+                href="/settings" 
+                className="inline-flex items-center px-4 py-2 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg text-sm font-medium transition-colors"
+              >
+                📝 Configure Custody Schedule in Settings
+              </a>
             </div>
           )}
           

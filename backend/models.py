@@ -59,6 +59,14 @@ class ContractUpload(BaseModel):
     fileContent: str  # Base64 encoded file content
     fileType: str  # pdf, doc, txt, etc.
 
+class CustodyManualData(BaseModel):
+    custodySchedule: str
+    holidaySchedule: Optional[str] = None
+    decisionMaking: Optional[str] = None
+    expenseSplitRatio: Optional[str] = "50-50"
+    expenseParent1: Optional[float] = 50.0
+    expenseParent2: Optional[float] = 50.0
+
 class ChildCreate(BaseModel):
     name: str
     dateOfBirth: date

@@ -141,7 +141,7 @@ Return ONLY a valid JSON object with this exact structure (no markdown, no code 
 
 {{
     "custodyArrangement": "50-50" | "primary-secondary" | "custom",
-    "custodySchedule": "description of schedule (e.g., week-on/week-off, 2-2-3, alternating weeks)",
+    "custodySchedule": "Detailed description of the schedule. EXPLICITLY state which days belong to which parent (e.g., 'Mon/Tue: Parent 1, Wed/Thu: Parent 2, Fri-Sun: Alternating').",
     "holidaySchedule": "description of holiday arrangements",
     "decisionMaking": "joint" | "sole" | "split",
     "expenseSplit": {{

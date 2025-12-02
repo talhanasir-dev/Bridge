@@ -132,7 +132,7 @@ export const familyAPI = {
     const url = window.URL.createObjectURL(blob);
     const contentDisposition = response.headers.get('Content-Disposition');
     let filename = 'custody_agreement.pdf';
-    
+
     if (contentDisposition) {
       // Improved regex to handle quoted and unquoted filenames, and remove trailing underscores
       const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -169,6 +169,26 @@ export const familyAPI = {
       url.searchParams.append('period', params.period);
     }
     return fetchWithAuth(url.pathname + url.search);
+  },
+
+  saveManualCustody: async (data: {
+    custodySchedule: string;
+    holidaySchedule?: string;
+    decisionMaking?: string;
+    expenseSplitRatio?: string;
+    expenseParent1?: number;
+    expenseParent2?: number;
+  }) => {
+    return fetchWithAuth('/api/v1/family/custody-manual', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteContract: async () => {
+    return fetchWithAuth('/api/v1/family/contract', {
+      method: 'DELETE',
+    });
   },
 };
 
@@ -410,7 +430,7 @@ export const documentsAPI = {
   },
 
   getDocuments: async (folderId?: string) => {
-    const url = folderId 
+    const url = folderId
       ? `/api/v1/documents?folder_id=${folderId}`
       : '/api/v1/documents';
     return fetchWithAuth(url);
@@ -442,17 +462,17 @@ export const documentsAPI = {
     const apiBaseUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
     const fullUrl = fileUrl.startsWith('http') ? fileUrl : `${apiBaseUrl}${fileUrl}`;
     const token = localStorage.getItem('authToken');
-    
+
     const response = await fetch(fullUrl, {
       headers: {
         'Authorization': `Bearer ${token}`
       }
     });
-    
+
     if (!response.ok) {
       throw new Error('Failed to fetch document');
     }
-    
+
     const blob = await response.blob();
     return URL.createObjectURL(blob);
   },
