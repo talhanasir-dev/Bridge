@@ -233,6 +233,11 @@ Document text:
         text_lower = original_text.lower()
         custody_schedule = parsed.get("custodySchedule", "").lower()
         
+        print("\n" + "="*70)
+        print("🔍 NORMALIZING PARSED DATA")
+        print("="*70)
+        print(f"Original AI result: '{parsed.get('custodySchedule', 'NOT SET')}'")
+        
         # Priority 1: Check if original text explicitly mentions 2-2-3 in main custody sections
         # Look for 2-2-3 in sections about Physical Custody, Parenting Time, or Schedule
         custody_sections = []
@@ -243,6 +248,7 @@ Document text:
                 if idx >= 0:
                     section_text = text_lower[idx:idx+500]
                     custody_sections.append(section_text)
+                    print(f"Found section '{section}' at position {idx}")
         
         # Check if 2-2-3 is mentioned in main custody sections
         has_2_2_3_in_main = any(
@@ -256,16 +262,31 @@ Document text:
             for section in custody_sections
         ) and not has_2_2_3_in_main  # Only if 2-2-3 is NOT in main sections
         
+        print(f"Has 2-2-3 in main sections: {has_2_2_3_in_main}")
+        print(f"Has weekly in main sections: {has_weekly_in_main}")
+        
         # Normalize custody schedule
+        original_schedule = parsed.get("custodySchedule")
         if has_2_2_3_in_main:
             # Force 2-2-3 if it's in the main custody sections, regardless of what AI returned
             parsed["custodySchedule"] = "2-2-3 schedule"
+            print(f"✅ OVERRIDING to '2-2-3 schedule' (found in main sections)")
         elif has_weekly_in_main:
             parsed["custodySchedule"] = "Week-on/week-off"
+            print(f"✅ Setting to 'Week-on/week-off' (found in main sections)")
         elif "2-2-3" in custody_schedule or "two-two-three" in custody_schedule:
             parsed["custodySchedule"] = "2-2-3 schedule"
+            print(f"✅ Setting to '2-2-3 schedule' (found in AI response)")
         elif "week-on" in custody_schedule or "week on week off" in custody_schedule or "alternating week" in custody_schedule:
             parsed["custodySchedule"] = "Week-on/week-off"
+            print(f"✅ Setting to 'Week-on/week-off' (found in AI response)")
+        
+        if original_schedule != parsed.get("custodySchedule"):
+            print(f"⚠️  Changed from '{original_schedule}' to '{parsed.get('custodySchedule')}'")
+        else:
+            print(f"No change needed: '{parsed.get('custodySchedule')}'")
+        
+        print("="*70 + "\n")
         
         return parsed
     
